@@ -79,6 +79,17 @@ jobs:
           os.makedirs(out_dir, exist_ok=True)
           with zipfile.ZipFile(zip_path, "r") as zf:
             zf.extractall(out_dir)
+            for info in zf.infolist():
+              rel_path = info.filename
+              if not rel_path or rel_path.endswith("/"):
+                continue
+              full_path = os.path.join(out_dir, rel_path)
+              mode = (info.external_attr >> 16) & 0o777
+              if mode:
+                try:
+                  os.chmod(full_path, mode)
+                except OSError:
+                  pass
           EOF
           chmod +x "$HOME/.local/bin/unzip"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
