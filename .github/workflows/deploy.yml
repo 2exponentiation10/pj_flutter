@@ -23,7 +23,7 @@ jobs:
     env:
       DEPLOY_ROOT: /opt/protfolio/satoori
       API_BASE_URL: https://satoori-api.protfolio.store/api
-      DOCKER_SUDO: "true"
+      DOCKER_SUDO: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,8 +38,8 @@ jobs:
 
       - name: Verify Docker
         run: |
-          sudo docker --version
-          sudo docker compose version
+          docker --version
+          docker compose version
 
       - name: Deploy Flutter web
         run: bash scripts/deploy_flutter.sh
