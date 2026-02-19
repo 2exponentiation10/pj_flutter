@@ -91,6 +91,14 @@ jobs:
           chmod +x "$HOME/.local/bin/unzip"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      - name: Fix Flutter cache execute permissions
+        shell: bash
+        run: |
+          FLUTTER_HOME="$HOME/flutter-stable"
+          if [ -d "$FLUTTER_HOME/bin/cache/dart-sdk/bin" ]; then
+            chmod +x "$FLUTTER_HOME/bin/cache/dart-sdk/bin/"* || true
+          fi
+
       - name: Verify Flutter
         run: flutter --version
 
