@@ -1,15 +1,17 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:googleapis/texttospeech/v1.dart' as tts;
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:http/http.dart' as http;
+import 'package:microphone/microphone.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -42,12 +44,16 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   bool isListening = false;
   bool isPlaying = false;
   bool isEvaluatingAudio = false;
-  bool isEvaluatingManualText = false;
+  bool _isFinalizing = false;
   bool speechRecognitionSupported = true;
 
   String recognizedText = '';
   String listeningStatusText = '직접 말하기를 눌러 음성 입력을 시작하세요.';
-  final TextEditingController _manualController = TextEditingController();
+  MicrophoneRecorder? _webMicRecorder;
+  Uint8List? _webAudioBytes;
+  final List<double> _liveInputCurve = [];
+  double _soundLevelMin = 0;
+  double _soundLevelMax = 0;
 
   int playCount = 0;
 
@@ -63,7 +69,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       speechRecognitionSupported = hasWebSpeechRecognition;
       if (!speechRecognitionSupported) {
         listeningStatusText = isLikelySafari
-            ? 'Safari에서는 웹 음성 입력이 제한될 수 있습니다. 텍스트 입력/오디오 업로드를 사용해 주세요.'
+            ? 'Safari에서는 웹 음성 입력이 제한될 수 있습니다.'
             : '현재 브라우저에서 웹 음성 입력을 사용할 수 없습니다.';
       }
     }
@@ -226,11 +232,12 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
 
   Future<void> _startListening() async {
     if (kIsWeb && !speechRecognitionSupported) {
-      _showErrorDialog('이 브라우저에서는 음성 입력이 제한됩니다. 텍스트 입력 또는 음성 파일 업로드를 사용해 주세요.');
+      _showErrorDialog('이 브라우저에서는 음성 입력이 제한됩니다.');
       return;
     }
 
     await _checkPermissions();
+    await _startWebMicRecordingIfPossible();
 
     final available = await _speech.initialize(
       onStatus: (val) {
@@ -248,6 +255,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
           isListening = false;
           listeningStatusText = '음성 입력 오류: ${val.errorMsg}';
         });
+        _stopWebMicRecordingIfPossible();
       },
     );
 
@@ -256,8 +264,9 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       setState(() {
         isListening = false;
         speechRecognitionSupported = false;
-        listeningStatusText = '음성 입력 초기화에 실패했습니다. 텍스트 입력/오디오 업로드를 사용해 주세요.';
+        listeningStatusText = '음성 입력 초기화에 실패했습니다.';
       });
+      await _stopWebMicRecordingIfPossible();
       await _speech.stop();
       return;
     }
@@ -266,6 +275,9 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       isListening = true;
       recognizedText = '';
       listeningStatusText = '음성 입력 중... 또박또박 말해 주세요.';
+      _liveInputCurve.clear();
+      _soundLevelMin = 0;
+      _soundLevelMax = 0;
     });
 
     _speech.listen(
@@ -279,12 +291,13 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
           }
         });
         if (val.finalResult && val.recognizedWords.trim().isNotEmpty) {
-          _evaluateSpeech();
+          _finalizeAndEvaluate();
         }
       },
       listenFor: const Duration(seconds: 8),
       pauseFor: const Duration(seconds: 3),
       localeId: 'ko-KR',
+      onSoundLevelChange: _onSoundLevelChange,
       listenOptions: stt.SpeechListenOptions(partialResults: true),
     );
   }
@@ -296,12 +309,77 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       listeningStatusText = '음성 입력을 중지했습니다.';
     });
     await _speech.stop();
-    if (recognizedText.trim().isNotEmpty) {
-      await _evaluateSpeech();
+    await _finalizeAndEvaluate();
+  }
+
+  void _onSoundLevelChange(double level) {
+    final l = level.isFinite ? level : 0.0;
+    if (_liveInputCurve.isEmpty) {
+      _soundLevelMin = l;
+      _soundLevelMax = l;
+    } else {
+      _soundLevelMin = math.min(_soundLevelMin, l);
+      _soundLevelMax = math.max(_soundLevelMax, l);
+    }
+    final denom = (_soundLevelMax - _soundLevelMin).abs() + 0.0001;
+    final normalized = ((l - _soundLevelMin) / denom).clamp(0.0, 1.0);
+    if (!mounted) return;
+    setState(() {
+      _liveInputCurve.add(normalized);
+      if (_liveInputCurve.length > 64) {
+        _liveInputCurve.removeAt(0);
+      }
+    });
+  }
+
+  Future<void> _startWebMicRecordingIfPossible() async {
+    if (!kIsWeb) return;
+    try {
+      _webMicRecorder?.dispose();
+      final recorder = MicrophoneRecorder();
+      await recorder.init();
+      await recorder.start();
+      _webMicRecorder = recorder;
+      _webAudioBytes = null;
+    } catch (_) {
+      _webMicRecorder = null;
+      _webAudioBytes = null;
     }
   }
 
-  Future<void> _evaluateSpeech() async {
+  Future<void> _stopWebMicRecordingIfPossible() async {
+    if (!kIsWeb || _webMicRecorder == null) return;
+    try {
+      await _webMicRecorder!.stop();
+      _webAudioBytes = await _webMicRecorder!.toBytes();
+    } catch (_) {
+      _webAudioBytes = null;
+    } finally {
+      _webMicRecorder?.dispose();
+      _webMicRecorder = null;
+    }
+  }
+
+  Future<void> _finalizeAndEvaluate() async {
+    if (_isFinalizing) return;
+    _isFinalizing = true;
+    try {
+      if (mounted) {
+        setState(() => isEvaluatingAudio = true);
+      }
+      await _stopWebMicRecordingIfPossible();
+      if (recognizedText.trim().isNotEmpty) {
+        await _evaluateSpeech(audioBytes: _webAudioBytes);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => isEvaluatingAudio = false);
+      }
+      _isFinalizing = false;
+    }
+  }
+
+  Future<void> _evaluateSpeech({Uint8List? audioBytes}) async {
     final recognized = recognizedText.trim();
     if (recognized.isEmpty) {
       _showErrorDialog('인식된 텍스트가 없습니다. 다시 시도해 주세요.');
@@ -316,6 +394,9 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
         sentenceId: current.id,
         referenceText: current.koreanSentence,
         recognizedText: recognized,
+        audioBytes: audioBytes,
+        fileName: 'mic_input',
+        contentType: _detectAudioContentType(audioBytes),
       );
       await _api.updateSentenceAccuracyAndText(
         current.id,
@@ -329,85 +410,26 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     }
   }
 
-  Future<void> _pickAudioAndEvaluate() async {
-    if (isEvaluatingAudio) return;
-
-    final picked = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['webm', 'wav', 'mp3', 'm4a', 'ogg'],
-      withData: true,
-    );
-
-    if (picked == null || picked.files.isEmpty) return;
-    final file = picked.files.first;
-    final bytes = file.bytes;
-    if (bytes == null || bytes.isEmpty) {
-      _showErrorDialog('파일 데이터를 읽지 못했습니다.');
-      return;
+  String _detectAudioContentType(Uint8List? bytes) {
+    if (bytes == null || bytes.length < 4) return 'audio/webm';
+    if (bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46) {
+      return 'audio/wav';
     }
-
-    final sentences = await futureSentences;
-    final current = sentences[currentIndex];
-
-    setState(() {
-      isEvaluatingAudio = true;
-      listeningStatusText = '음성 파일 평가 중...';
-    });
-
-    try {
-      final result = await _api.evaluatePronunciation(
-        sentenceId: current.id,
-        referenceText: current.koreanSentence,
-        audioBytes: bytes,
-        fileName: file.name,
-        contentType: _mimeTypeFromName(file.name),
-      );
-
-      await _api.updateSentenceAccuracyAndText(
-        current.id,
-        result.accuracyRatio,
-        result.transcript,
-      );
-
-      if (!mounted) return;
-      recognizedText = result.transcript;
-      _showEvaluationPopup(result);
-    } catch (e) {
-      _showErrorDialog('오디오 평가 실패: $e');
-    } finally {
-      if (mounted) {
-        setState(() => isEvaluatingAudio = false);
-      }
+    if (bytes[0] == 0x4F &&
+        bytes[1] == 0x67 &&
+        bytes[2] == 0x67 &&
+        bytes[3] == 0x53) {
+      return 'audio/ogg';
     }
-  }
-
-  Future<void> _evaluateManualText() async {
-    if (isEvaluatingManualText) return;
-    final text = _manualController.text.trim();
-    if (text.isEmpty) {
-      _showErrorDialog('평가할 텍스트를 먼저 입력해 주세요.');
-      return;
+    if (bytes[0] == 0x1A &&
+        bytes[1] == 0x45 &&
+        bytes[2] == 0xDF &&
+        bytes[3] == 0xA3) {
+      return 'audio/webm';
     }
-    setState(() {
-      recognizedText = text;
-      isEvaluatingManualText = true;
-      listeningStatusText = '텍스트 기반 평가 중...';
-    });
-    try {
-      await _evaluateSpeech();
-    } finally {
-      if (mounted) {
-        setState(() => isEvaluatingManualText = false);
-      }
-    }
-  }
-
-  String _mimeTypeFromName(String fileName) {
-    final lower = fileName.toLowerCase();
-    if (lower.endsWith('.wav')) return 'audio/wav';
-    if (lower.endsWith('.mp3')) return 'audio/mpeg';
-    if (lower.endsWith('.m4a')) return 'audio/mp4';
-    if (lower.endsWith('.ogg')) return 'audio/ogg';
     return 'audio/webm';
   }
 
@@ -543,7 +565,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   @override
   void dispose() {
     _speech.stop();
-    _manualController.dispose();
+    _webMicRecorder?.dispose();
     audioPlayer.dispose();
     super.dispose();
   }
@@ -615,8 +637,8 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                 ),
                                 child: Text(
                                   isLikelySafari
-                                      ? 'Safari에서는 웹 음성인식이 제한됩니다. 아래 텍스트 평가/음성 파일 업로드를 사용해 주세요.'
-                                      : '현재 브라우저에서는 웹 음성인식이 제한됩니다. 아래 텍스트 평가/음성 파일 업로드를 사용해 주세요.',
+                                      ? 'Safari에서는 웹 음성인식이 제한될 수 있습니다.'
+                                      : '현재 브라우저에서는 웹 음성인식이 제한될 수 있습니다.',
                                   style: const TextStyle(fontSize: 12),
                                 ),
                               ),
@@ -685,6 +707,20 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                 ),
                               ],
                             ),
+                            if (_liveInputCurve.length > 2) ...[
+                              const SizedBox(height: 10),
+                              const Text('입력 음성 형태(실시간 레벨)'),
+                              const SizedBox(height: 6),
+                              SizedBox(
+                                height: 90,
+                                child: VoiceCurveCompareChart(
+                                  referenceCurve: const [],
+                                  userCurve: _liveInputCurve,
+                                  referenceLabel: '',
+                                  userLabel: '입력 레벨',
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 10),
                             Container(
                               width: double.infinity,
@@ -706,12 +742,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                   ),
                                   SizedBox(height: 6),
                                   Text(
-                                    '오디오 업로드 시: 텍스트 60% + 속도 20% + 피치 20%',
-                                    style: TextStyle(fontSize: 12),
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    '텍스트만 평가 시: 문자 유사도 75% + 핵심 단어 일치율 25%',
+                                    '직접 말하기(마이크): 텍스트 60% + 속도 20% + 피치 20%',
                                     style: TextStyle(fontSize: 12),
                                   ),
                                 ],
@@ -833,54 +864,11 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 10),
-                            TextField(
-                              controller: _manualController,
-                              minLines: 1,
-                              maxLines: 3,
-                              decoration: const InputDecoration(
-                                hintText: '직접 말한 문장을 텍스트로 입력해 평가할 수 있습니다.',
-                                border: OutlineInputBorder(),
+                            if (_isFinalizing || isEvaluatingAudio)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8),
+                                child: LinearProgressIndicator(minHeight: 2),
                               ),
-                            ),
-                            const SizedBox(height: 10),
-                            ElevatedButton(
-                              onPressed: isEvaluatingManualText
-                                  ? null
-                                  : _evaluateManualText,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.indigo,
-                                minimumSize: const Size(double.infinity, 50),
-                              ),
-                              child: Text(
-                                isEvaluatingManualText
-                                    ? '텍스트 평가 중...'
-                                    : '텍스트로 평가하기',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            ElevatedButton(
-                              onPressed: isEvaluatingAudio
-                                  ? null
-                                  : _pickAudioAndEvaluate,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blueGrey,
-                                minimumSize: const Size(double.infinity, 50),
-                              ),
-                              child: Text(
-                                isEvaluatingAudio
-                                    ? '오디오 평가 중...'
-                                    : '음성 파일 업로드 평가',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
                           ],
                         ),
                       ),
