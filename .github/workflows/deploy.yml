@@ -41,9 +41,6 @@ jobs:
       - name: Ensure unzip command
         shell: bash
         run: |
-          if command -v unzip >/dev/null 2>&1; then
-            exit 0
-          fi
           mkdir -p "$HOME/.local/bin"
           cat > "$HOME/.local/bin/unzip" <<'EOF'
           #!/usr/bin/env python3
