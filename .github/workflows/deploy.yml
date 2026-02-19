@@ -28,6 +28,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Clean broken Flutter cache
+        run: rm -rf "$RUNNER_TOOL_CACHE/flutter" || true
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
