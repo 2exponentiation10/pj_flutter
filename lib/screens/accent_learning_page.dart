@@ -55,8 +55,10 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
 
   Future<AutoRefreshingAuthClient> _getAuthClient() async {
     try {
-      final serviceAccountJson = await rootBundle.loadString('assets/service_account.json');
-      final credentials = ServiceAccountCredentials.fromJson(serviceAccountJson);
+      final serviceAccountJson =
+          await rootBundle.loadString('assets/service_account.json');
+      final credentials =
+          ServiceAccountCredentials.fromJson(serviceAccountJson);
       final scopes = [tts.TexttospeechApi.cloudPlatformScope];
       return clientViaServiceAccount(credentials, scopes);
     } catch (e) {
@@ -79,7 +81,8 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
 
       final input = tts.SynthesizeSpeechRequest(
         input: tts.SynthesisInput(text: text),
-        voice: tts.VoiceSelectionParams(languageCode: 'ko-KR', name: 'ko-KR-Wavenet-D'),
+        voice: tts.VoiceSelectionParams(
+            languageCode: 'ko-KR', name: 'ko-KR-Wavenet-D'),
         audioConfig: tts.AudioConfig(audioEncoding: 'MP3', speakingRate: 0.9),
       );
 
@@ -124,7 +127,8 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   }
 
   Future<void> _saveSentence(int sentenceId) async {
-    final response = await http.post(Uri.parse('${ApiService.baseUrl}/sentences/$sentenceId/save/'));
+    final response = await http
+        .post(Uri.parse('${ApiService.baseUrl}/sentences/$sentenceId/save/'));
 
     if (response.statusCode == 200) {
       setState(() {
@@ -160,8 +164,12 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       }
     }
 
-    final updatedSentences = await ApiService().fetchSentences(widget.chapterId);
-    final progress = updatedSentences.where((sentence) => sentence.isCalled).length / updatedSentences.length * 100;
+    final updatedSentences =
+        await ApiService().fetchSentences(widget.chapterId);
+    final progress =
+        updatedSentences.where((sentence) => sentence.isCalled).length /
+            updatedSentences.length *
+            100;
 
     Navigator.pushReplacement(
       context,
@@ -237,32 +245,32 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
 
   void _showEvaluationPopup(double score, double precision, double recall) {
     showDialog(
-        context: context,
-        builder: (BuildContext context) {
-      return AlertDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
           title: Text('평가 결과'),
-    content: Column(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-    Text('억양 정확도: ${(score * 100).toStringAsFixed(2)}%'),
-    SizedBox(height: 10),
-    Text('Precision: ${(precision * 100).toStringAsFixed(2)}%'),
-    SizedBox(height: 10),
-    Text('Recall: ${(recall * 100).toStringAsFixed(2)}%'),
-    SizedBox(height: 10),
-    Text('인식된 내용: $recognizedText'),
-    ],
-    ),
-        actions: <Widget>[
-          TextButton(
-            child: Text('닫기'),
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('억양 정확도: ${(score * 100).toStringAsFixed(2)}%'),
+              SizedBox(height: 10),
+              Text('Precision: ${(precision * 100).toStringAsFixed(2)}%'),
+              SizedBox(height: 10),
+              Text('Recall: ${(recall * 100).toStringAsFixed(2)}%'),
+              SizedBox(height: 10),
+              Text('인식된 내용: $recognizedText'),
+            ],
           ),
-        ],
-      );
-        },
+          actions: <Widget>[
+            TextButton(
+              child: Text('닫기'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -289,7 +297,8 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
             return FutureBuilder<Chapter>(
               future: futureChapter,
               builder: (context, chapterSnapshot) {
-                if (chapterSnapshot.connectionState == ConnectionState.waiting) {
+                if (chapterSnapshot.connectionState ==
+                    ConnectionState.waiting) {
                   return Center(child: CircularProgressIndicator());
                 } else if (chapterSnapshot.hasError) {
                   print('Error fetching chapter: ${chapterSnapshot.error}');
@@ -308,15 +317,20 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('#${chapter.id} #${chapter.title}', style: TextStyle(fontSize: 14)),
+                                Text('#${chapter.id} #${chapter.title}',
+                                    style: TextStyle(fontSize: 14)),
                                 SizedBox(height: 10),
                                 Image.asset(
                                   'assets/images/${currentSentence.koreanSentence}.png',
                                   width: double.infinity,
-                                  height: 200,
+                                  height: (MediaQuery.of(context).size.height *
+                                          0.26)
+                                      .clamp(140.0, 220.0)
+                                      .toDouble(),
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stackTrace) {
-                                    return Text('Error loading image', style: TextStyle(color: Colors.red));
+                                    return Text('Error loading image',
+                                        style: TextStyle(color: Colors.red));
                                   },
                                 ),
                                 SizedBox(height: 10),
@@ -324,18 +338,24 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                   color: Colors.grey[200],
                                   child: Center(
                                     child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
-                                        Text(currentSentence.koreanSentence, style: TextStyle(fontSize: 24)),
-                                        Text(': ${currentSentence.northKoreanSentence}', style: TextStyle(fontSize: 18)),
+                                        Text(currentSentence.koreanSentence,
+                                            style: TextStyle(fontSize: 24)),
+                                        Text(
+                                            ': ${currentSentence.northKoreanSentence}',
+                                            style: TextStyle(fontSize: 18)),
                                       ],
                                     ),
                                   ),
                                 ),
                                 SizedBox(height: 10),
-                                Text('Greetings', style: TextStyle(fontSize: 16)),
+                                Text('Greetings',
+                                    style: TextStyle(fontSize: 16)),
                                 SizedBox(height: 5),
-                                Text('${sentences.length} sentences', style: TextStyle(fontSize: 14)),
+                                Text('${sentences.length} sentences',
+                                    style: TextStyle(fontSize: 14)),
                               ],
                             ),
                           ),
@@ -354,12 +374,23 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                       _saveSentence(currentSentence.id);
                                     }
                                   },
-                                  child: Text(currentSentence.isCorrect ? '저장됨' : '저장하기', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  child: Text(
+                                      currentSentence.isCorrect
+                                          ? '저장됨'
+                                          : '저장하기',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold)),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: currentSentence.isCorrect ? Colors.black : Colors.white,
-                                    foregroundColor: currentSentence.isCorrect ? Colors.white : Colors.black,
+                                    backgroundColor: currentSentence.isCorrect
+                                        ? Colors.black
+                                        : Colors.white,
+                                    foregroundColor: currentSentence.isCorrect
+                                        ? Colors.white
+                                        : Colors.black,
                                     minimumSize: Size(double.infinity, 50),
-                                    side: currentSentence.isCorrect ? null : BorderSide(color: Colors.black),
+                                    side: currentSentence.isCorrect
+                                        ? null
+                                        : BorderSide(color: Colors.black),
                                   ),
                                 ),
                                 SizedBox(height: 10),
@@ -370,9 +401,12 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                         currentIndex--;
                                       });
                                     },
-                                    child: Text('이전', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    child: Text('이전',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold)),
                                     style: ElevatedButton.styleFrom(
-                                      foregroundColor: Colors.black, backgroundColor: Colors.white,
+                                      foregroundColor: Colors.black,
+                                      backgroundColor: Colors.white,
                                       minimumSize: Size(double.infinity, 50),
                                       side: BorderSide(color: Colors.black),
                                     ),
@@ -383,9 +417,12 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                     onPressed: () {
                                       _nextSentence(sentences);
                                     },
-                                    child: Text('다음', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    child: Text('다음',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold)),
                                     style: ElevatedButton.styleFrom(
-                                      foregroundColor: Colors.black, backgroundColor: Colors.white,
+                                      foregroundColor: Colors.black,
+                                      backgroundColor: Colors.white,
                                       minimumSize: Size(double.infinity, 50),
                                       side: BorderSide(color: Colors.black),
                                     ),
@@ -393,7 +430,10 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                 if (currentIndex == sentences.length - 1)
                                   ElevatedButton(
                                     onPressed: _completeLearning,
-                                    child: Text('완료하기', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                    child: Text('완료하기',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white)),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.black,
                                       minimumSize: Size(double.infinity, 50),
@@ -401,8 +441,12 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                   ),
                                 SizedBox(height: 10),
                                 ElevatedButton(
-                                  onPressed: () => _playTextToSpeech(currentSentence.koreanSentence),
-                                  child: Text('음성 듣기', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                  onPressed: () => _playTextToSpeech(
+                                      currentSentence.koreanSentence),
+                                  child: Text('음성 듣기',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white)),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.black,
                                     minimumSize: Size(double.infinity, 50),
@@ -410,8 +454,14 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                 ),
                                 SizedBox(height: 10),
                                 ElevatedButton(
-                                  onPressed: () => isListening ? _stopListening() : _startListening(),
-                                  child: Text(isListening ? '듣기 중지하기' : '직접 말하기', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                  onPressed: () => isListening
+                                      ? _stopListening()
+                                      : _startListening(),
+                                  child: Text(
+                                      isListening ? '듣기 중지하기' : '직접 말하기',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white)),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.black,
                                     minimumSize: Size(double.infinity, 50),
@@ -427,7 +477,10 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                           children: [
                             Spacer(),
                             Container(
-                              height: MediaQuery.of(context).size.height / 3,
+                              height:
+                                  (MediaQuery.of(context).size.height * 0.28)
+                                      .clamp(170.0, 260.0)
+                                      .toDouble(),
                               decoration: BoxDecoration(
                                 color: Colors.blue.withOpacity(1.0),
                                 borderRadius: BorderRadius.only(

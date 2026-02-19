@@ -45,6 +45,14 @@ class MyApp extends StatelessWidget {
           darkTheme: AppTheme.dark(),
           themeMode:
               settingsProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+          builder: (context, child) {
+            final media = MediaQuery.of(context);
+            final scale = media.textScaleFactor.clamp(0.9, 1.15);
+            return MediaQuery(
+              data: media.copyWith(textScaleFactor: scale),
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
           home: HomePage(),
         );
       },

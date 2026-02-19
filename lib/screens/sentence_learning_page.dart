@@ -34,15 +34,19 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
   @override
   void initState() {
     super.initState();
-    futureSentences = ApiService().fetchSentences(widget.chapterId); // 챕터 ID로 문장 목록을 받아옴
-    futureChapter = ApiService().fetchChapter(widget.chapterId); // 챕터 ID로 챕터 정보를 받아옴
+    futureSentences =
+        ApiService().fetchSentences(widget.chapterId); // 챕터 ID로 문장 목록을 받아옴
+    futureChapter =
+        ApiService().fetchChapter(widget.chapterId); // 챕터 ID로 챕터 정보를 받아옴
     audioPlayer = AudioPlayer(); // 오디오 플레이어 초기화
   }
 
   Future<AutoRefreshingAuthClient> _getAuthClient() async {
     try {
-      final serviceAccountJson = await rootBundle.loadString('assets/service_account.json');
-      final credentials = ServiceAccountCredentials.fromJson(serviceAccountJson);
+      final serviceAccountJson =
+          await rootBundle.loadString('assets/service_account.json');
+      final credentials =
+          ServiceAccountCredentials.fromJson(serviceAccountJson);
       final scopes = [tts.TexttospeechApi.cloudPlatformScope];
       return clientViaServiceAccount(credentials, scopes);
     } catch (e) {
@@ -65,7 +69,8 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
 
       final input = tts.SynthesizeSpeechRequest(
         input: tts.SynthesisInput(text: text),
-        voice: tts.VoiceSelectionParams(languageCode: 'ko-KR', name: 'ko-KR-Wavenet-D'),
+        voice: tts.VoiceSelectionParams(
+            languageCode: 'ko-KR', name: 'ko-KR-Wavenet-D'),
         audioConfig: tts.AudioConfig(audioEncoding: 'MP3', speakingRate: 0.9),
       );
 
@@ -87,7 +92,8 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
   }
 
   Future<void> _playAudioFile(String filePath) async {
-    await audioPlayer.play(DeviceFileSource(filePath)); // No need to check result
+    await audioPlayer
+        .play(DeviceFileSource(filePath)); // No need to check result
 
     audioPlayer.onPlayerComplete.listen((event) async {
       playCount++;
@@ -101,6 +107,7 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
       }
     });
   }
+
   Future<void> _stopTextToSpeech() async {
     await audioPlayer.stop();
     setState(() {
@@ -109,7 +116,8 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
   }
 
   Future<void> _saveSentence(int sentenceId) async {
-    final response = await http.post(Uri.parse('${ApiService.baseUrl}/sentences/$sentenceId/save/'));
+    final response = await http
+        .post(Uri.parse('${ApiService.baseUrl}/sentences/$sentenceId/save/'));
 
     if (response.statusCode == 200) {
       setState(() {
@@ -145,8 +153,12 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
       }
     }
 
-    final updatedSentences = await ApiService().fetchSentences(widget.chapterId);
-    final progress = updatedSentences.where((sentence) => sentence.isCalled).length / updatedSentences.length * 100;
+    final updatedSentences =
+        await ApiService().fetchSentences(widget.chapterId);
+    final progress =
+        updatedSentences.where((sentence) => sentence.isCalled).length /
+            updatedSentences.length *
+            100;
 
     Navigator.pushReplacement(
       context,
@@ -183,7 +195,8 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
             return FutureBuilder<Chapter>(
               future: futureChapter,
               builder: (context, chapterSnapshot) {
-                if (chapterSnapshot.connectionState == ConnectionState.waiting) {
+                if (chapterSnapshot.connectionState ==
+                    ConnectionState.waiting) {
                   return Center(child: CircularProgressIndicator());
                 } else if (chapterSnapshot.hasError) {
                   print('Error fetching chapter: ${chapterSnapshot.error}');
@@ -202,15 +215,20 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('#${chapter.id} #${chapter.title}', style: TextStyle(fontSize: 14)),
+                                Text('#${chapter.id} #${chapter.title}',
+                                    style: TextStyle(fontSize: 14)),
                                 SizedBox(height: 10),
                                 Image.asset(
                                   'assets/images/${currentSentence.koreanSentence}.png',
                                   width: double.infinity,
-                                  height: 200,
+                                  height: (MediaQuery.of(context).size.height *
+                                          0.26)
+                                      .clamp(140.0, 220.0)
+                                      .toDouble(),
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stackTrace) {
-                                    return Text('Error loading image', style: TextStyle(color: Colors.red));
+                                    return Text('Error loading image',
+                                        style: TextStyle(color: Colors.red));
                                   },
                                 ),
                                 SizedBox(height: 10),
@@ -218,18 +236,24 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
                                   color: Colors.grey[200],
                                   child: Center(
                                     child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
-                                        Text(currentSentence.koreanSentence, style: TextStyle(fontSize: 24)),
-                                        Text(': ${currentSentence.northKoreanSentence}', style: TextStyle(fontSize: 18)),
+                                        Text(currentSentence.koreanSentence,
+                                            style: TextStyle(fontSize: 24)),
+                                        Text(
+                                            ': ${currentSentence.northKoreanSentence}',
+                                            style: TextStyle(fontSize: 18)),
                                       ],
                                     ),
                                   ),
                                 ),
                                 SizedBox(height: 10),
-                                Text('Greetings', style: TextStyle(fontSize: 16)),
+                                Text('Greetings',
+                                    style: TextStyle(fontSize: 16)),
                                 SizedBox(height: 5),
-                                Text('${sentences.length} sentences', style: TextStyle(fontSize: 14)),
+                                Text('${sentences.length} sentences',
+                                    style: TextStyle(fontSize: 14)),
                               ],
                             ),
                           ),
@@ -248,12 +272,23 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
                                       _saveSentence(currentSentence.id);
                                     }
                                   },
-                                  child: Text(currentSentence.isCorrect ? '저장됨' : '저장하기', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  child: Text(
+                                      currentSentence.isCorrect
+                                          ? '저장됨'
+                                          : '저장하기',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold)),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: currentSentence.isCorrect ? Colors.black : Colors.white,
-                                    foregroundColor: currentSentence.isCorrect ? Colors.white : Colors.black,
+                                    backgroundColor: currentSentence.isCorrect
+                                        ? Colors.black
+                                        : Colors.white,
+                                    foregroundColor: currentSentence.isCorrect
+                                        ? Colors.white
+                                        : Colors.black,
                                     minimumSize: Size(double.infinity, 50),
-                                    side: currentSentence.isCorrect ? null : BorderSide(color: Colors.black),
+                                    side: currentSentence.isCorrect
+                                        ? null
+                                        : BorderSide(color: Colors.black),
                                   ),
                                 ),
                                 SizedBox(height: 10),
@@ -264,9 +299,12 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
                                         currentIndex--;
                                       });
                                     },
-                                    child: Text('이전', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    child: Text('이전',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold)),
                                     style: ElevatedButton.styleFrom(
-                                      foregroundColor: Colors.black, backgroundColor: Colors.white,
+                                      foregroundColor: Colors.black,
+                                      backgroundColor: Colors.white,
                                       minimumSize: Size(double.infinity, 50),
                                       side: BorderSide(color: Colors.black),
                                     ),
@@ -277,9 +315,12 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
                                     onPressed: () {
                                       _nextSentence(sentences);
                                     },
-                                    child: Text('다음', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    child: Text('다음',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold)),
                                     style: ElevatedButton.styleFrom(
-                                      foregroundColor: Colors.black, backgroundColor: Colors.white,
+                                      foregroundColor: Colors.black,
+                                      backgroundColor: Colors.white,
                                       minimumSize: Size(double.infinity, 50),
                                       side: BorderSide(color: Colors.black),
                                     ),
@@ -287,7 +328,10 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
                                 if (currentIndex == sentences.length - 1)
                                   ElevatedButton(
                                     onPressed: _completeLearning,
-                                    child: Text('완료하기', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                    child: Text('완료하기',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white)),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.black,
                                       minimumSize: Size(double.infinity, 50),
@@ -295,8 +339,12 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
                                   ),
                                 SizedBox(height: 10),
                                 ElevatedButton(
-                                  onPressed: () => _playTextToSpeech(currentSentence.koreanSentence),
-                                  child: Text('음성 듣기', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                  onPressed: () => _playTextToSpeech(
+                                      currentSentence.koreanSentence),
+                                  child: Text('음성 듣기',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white)),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.black,
                                     minimumSize: Size(double.infinity, 50),
@@ -315,7 +363,10 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
                               padding: const EdgeInsets.all(16.0),
                               child: ElevatedButton(
                                 onPressed: _stopTextToSpeech,
-                                child: Text('듣기 중지하기', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                child: Text('듣기 중지하기',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white)),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.black,
                                   minimumSize: Size(double.infinity, 50),
@@ -326,7 +377,10 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
                               ),
                             ),
                             Container(
-                              height: MediaQuery.of(context).size.height / 3,
+                              height:
+                                  (MediaQuery.of(context).size.height * 0.28)
+                                      .clamp(170.0, 260.0)
+                                      .toDouble(),
                               decoration: BoxDecoration(
                                 color: Colors.blue.withOpacity(1.0),
                                 borderRadius: BorderRadius.only(

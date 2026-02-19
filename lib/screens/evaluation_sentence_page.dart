@@ -23,9 +23,6 @@ class EvaluationSentencePage extends StatefulWidget {
 class _EvaluationSentencePageState extends State<EvaluationSentencePage> {
   String get baseUrl => ApiService.baseUrl;
 
-
-
-
   late Future<List<AppSentence>> futureSentence; // 미래의 문장 리스트를 저장하는 변수입니다.
   late Future<Chapter> futureChapter; // 미래의 챕터 데이터를 저장하는 변수입니다.
   int currentIndex = 0; // 현재 문장의 인덱스를 나타냅니다.
@@ -36,8 +33,10 @@ class _EvaluationSentencePageState extends State<EvaluationSentencePage> {
   @override
   void initState() {
     super.initState();
-    futureSentence = ApiService().fetchSentences(widget.chapterId); // 문장 데이터를 가져옵니다.
-    futureChapter = ApiService().fetchChapter(widget.chapterId); // 챕터 데이터를 가져옵니다.
+    futureSentence =
+        ApiService().fetchSentences(widget.chapterId); // 문장 데이터를 가져옵니다.
+    futureChapter =
+        ApiService().fetchChapter(widget.chapterId); // 챕터 데이터를 가져옵니다.
   }
 
   // 팝업을 표시하는 함수입니다.
@@ -63,7 +62,8 @@ class _EvaluationSentencePageState extends State<EvaluationSentencePage> {
   }
 
   // 문장의 정답 여부를 업데이트하는 함수입니다.
-  Future<void> _updateSentenceIsCollect(int sentenceId, bool isCorrect, bool isCollect) async {
+  Future<void> _updateSentenceIsCollect(
+      int sentenceId, bool isCorrect, bool isCollect) async {
     final response = await http.patch(
       Uri.parse('$baseUrl/sentences/$sentenceId/update/'),
       headers: {'Content-Type': 'application/json'},
@@ -94,7 +94,10 @@ class _EvaluationSentencePageState extends State<EvaluationSentencePage> {
 
       // 업데이트된 문장 리스트를 다시 불러옵니다.
       final updatedSentences = await ApiService().fetchSentences(chapterId);
-      final progress = updatedSentences.where((sentence) => sentence.isCalled).length / updatedSentences.length * 100;
+      final progress =
+          updatedSentences.where((sentence) => sentence.isCalled).length /
+              updatedSentences.length *
+              100;
 
       Navigator.pushReplacement(
         context,
@@ -120,23 +123,34 @@ class _EvaluationSentencePageState extends State<EvaluationSentencePage> {
         future: futureSentence,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator()); // 로딩 중일 때 표시되는 위젯입니다.
+            return Center(
+                child: CircularProgressIndicator()); // 로딩 중일 때 표시되는 위젯입니다.
           } else if (snapshot.hasError) {
-            return Center(child: Text('Failed to load sentences')); // 오류가 발생했을 때 표시되는 위젯입니다.
+            return Center(
+                child:
+                    Text('Failed to load sentences')); // 오류가 발생했을 때 표시되는 위젯입니다.
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('No sentences available')); // 데이터가 없을 때 표시되는 위젯입니다.
+            return Center(
+                child: Text('No sentences available')); // 데이터가 없을 때 표시되는 위젯입니다.
           } else {
             List<AppSentence> sentences = snapshot.data!;
             AppSentence currentSentence = sentences[currentIndex];
             return FutureBuilder<Chapter>(
               future: futureChapter,
               builder: (context, chapterSnapshot) {
-                if (chapterSnapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator()); // 로딩 중일 때 표시되는 위젯입니다.
+                if (chapterSnapshot.connectionState ==
+                    ConnectionState.waiting) {
+                  return Center(
+                      child:
+                          CircularProgressIndicator()); // 로딩 중일 때 표시되는 위젯입니다.
                 } else if (chapterSnapshot.hasError) {
-                  return Center(child: Text('Failed to load chapter')); // 오류가 발생했을 때 표시되는 위젯입니다.
+                  return Center(
+                      child: Text(
+                          'Failed to load chapter')); // 오류가 발생했을 때 표시되는 위젯입니다.
                 } else if (!chapterSnapshot.hasData) {
-                  return Center(child: Text('No chapter available')); // 데이터가 없을 때 표시되는 위젯입니다.
+                  return Center(
+                      child: Text(
+                          'No chapter available')); // 데이터가 없을 때 표시되는 위젯입니다.
                 } else {
                   Chapter chapter = chapterSnapshot.data!;
                   List<String> options = [
@@ -155,15 +169,22 @@ class _EvaluationSentencePageState extends State<EvaluationSentencePage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('#${chapter.id} #${chapter.title}', style: TextStyle(fontSize: 14)),
+                                Text('#${chapter.id} #${chapter.title}',
+                                    style: TextStyle(fontSize: 14)),
                                 SizedBox(height: 10),
                                 Image.asset(
                                   'assets/images/${currentSentence.koreanSentence}.png',
                                   width: double.infinity,
-                                  height: 200,
+                                  height: (MediaQuery.of(context).size.height *
+                                          0.26)
+                                      .clamp(140.0, 220.0)
+                                      .toDouble(),
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stackTrace) {
-                                    return Text('Error loading image', style: TextStyle(color: Colors.red)); // 이미지 로드 오류 시 표시되는 텍스트입니다.
+                                    return Text('Error loading image',
+                                        style: TextStyle(
+                                            color: Colors
+                                                .red)); // 이미지 로드 오류 시 표시되는 텍스트입니다.
                                   },
                                 ),
                                 SizedBox(height: 10),
@@ -171,10 +192,14 @@ class _EvaluationSentencePageState extends State<EvaluationSentencePage> {
                                   color: Colors.grey[200],
                                   child: Center(
                                     child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
-                                        Text(currentSentence.koreanSentence, style: TextStyle(fontSize: 24)),
-                                        Text(': ${currentSentence.northKoreanSentence}', style: TextStyle(fontSize: 18)),
+                                        Text(currentSentence.koreanSentence,
+                                            style: TextStyle(fontSize: 24)),
+                                        Text(
+                                            ': ${currentSentence.northKoreanSentence}',
+                                            style: TextStyle(fontSize: 18)),
                                       ],
                                     ),
                                   ),
@@ -190,10 +215,14 @@ class _EvaluationSentencePageState extends State<EvaluationSentencePage> {
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 10.0),
                                   child: ElevatedButton(
-                                    onPressed: () => _evaluateAnswer(option), // 버튼 클릭 시 답안을 평가합니다.
-                                    child: Text(option, style: TextStyle(fontWeight: FontWeight.bold)),
+                                    onPressed: () => _evaluateAnswer(
+                                        option), // 버튼 클릭 시 답안을 평가합니다.
+                                    child: Text(option,
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold)),
                                     style: ElevatedButton.styleFrom(
-                                      foregroundColor: Colors.black, backgroundColor: Colors.white,
+                                      foregroundColor: Colors.black,
+                                      backgroundColor: Colors.white,
                                       minimumSize: Size(double.infinity, 50),
                                       side: BorderSide(color: Colors.black),
                                     ),
@@ -217,7 +246,10 @@ class _EvaluationSentencePageState extends State<EvaluationSentencePage> {
                                       showPopup = false;
                                     });
                                   },
-                                  child: Text('다시 해보기', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                  child: Text('다시 해보기',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white)),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.black,
                                     minimumSize: Size(double.infinity, 50),
@@ -230,7 +262,8 @@ class _EvaluationSentencePageState extends State<EvaluationSentencePage> {
                             Padding(
                               padding: const EdgeInsets.all(16.0),
                               child: ElevatedButton(
-                                onPressed: () => _nextSentence(sentences), // 다음 문장으로 넘어갑니다.
+                                onPressed: () =>
+                                    _nextSentence(sentences), // 다음 문장으로 넘어갑니다.
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.black,
                                   minimumSize: Size(double.infinity, 50),
@@ -238,13 +271,21 @@ class _EvaluationSentencePageState extends State<EvaluationSentencePage> {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
-                                child: Text('다음으로', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                child: Text('다음으로',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white)),
                               ),
                             ),
                             Container(
-                              height: MediaQuery.of(context).size.height / 3,
+                              height:
+                                  (MediaQuery.of(context).size.height * 0.28)
+                                      .clamp(170.0, 260.0)
+                                      .toDouble(),
                               decoration: BoxDecoration(
-                                color: isCorrectAnswer ? Colors.green : Colors.red, // 정답 여부에 따라 색상이 다릅니다.
+                                color: isCorrectAnswer
+                                    ? Colors.green
+                                    : Colors.red, // 정답 여부에 따라 색상이 다릅니다.
                                 borderRadius: BorderRadius.only(
                                   topLeft: Radius.circular(20),
                                   topRight: Radius.circular(20),

@@ -94,8 +94,9 @@ class _ProgressPageState extends State<ProgressPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: GradientPage(
+    return GradientPage(
+      child: SafeArea(
+        bottom: false,
         child: FutureBuilder<ProgressData>(
           future: futureProgressData,
           builder: (context, snapshot) {

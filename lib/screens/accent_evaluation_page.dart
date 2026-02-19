@@ -399,7 +399,9 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
                       children: [
                         const Spacer(),
                         Container(
-                          height: MediaQuery.of(context).size.height / 3,
+                          height: (MediaQuery.of(context).size.height * 0.28)
+                              .clamp(170.0, 260.0)
+                              .toDouble(),
                           decoration: BoxDecoration(
                             color: Colors.blue,
                             borderRadius: const BorderRadius.only(

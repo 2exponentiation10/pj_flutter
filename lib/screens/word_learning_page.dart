@@ -35,14 +35,17 @@ class _WordLearningPageState extends State<WordLearningPage> {
   void initState() {
     super.initState();
     futureWords = ApiService().fetchWords(widget.chapterId);
-    futureChapter = ApiService().fetchChapter(widget.chapterId); // 챕터 제목을 가져오는 Future 초기화
+    futureChapter =
+        ApiService().fetchChapter(widget.chapterId); // 챕터 제목을 가져오는 Future 초기화
     audioPlayer = AudioPlayer();
   }
 
   Future<AutoRefreshingAuthClient> _getAuthClient() async {
     try {
-      final serviceAccountJson = await rootBundle.loadString('assets/service_account.json');
-      final credentials = ServiceAccountCredentials.fromJson(serviceAccountJson);
+      final serviceAccountJson =
+          await rootBundle.loadString('assets/service_account.json');
+      final credentials =
+          ServiceAccountCredentials.fromJson(serviceAccountJson);
       final scopes = [tts.TexttospeechApi.cloudPlatformScope];
       return clientViaServiceAccount(credentials, scopes);
     } catch (e) {
@@ -65,8 +68,10 @@ class _WordLearningPageState extends State<WordLearningPage> {
 
       final input = tts.SynthesizeSpeechRequest(
         input: tts.SynthesisInput(text: text),
-        voice: tts.VoiceSelectionParams(languageCode: 'ko-KR', name: 'ko-KR-Wavenet-D'),
-        audioConfig: tts.AudioConfig(audioEncoding: 'MP3', speakingRate: 0.9), // 속도 조절
+        voice: tts.VoiceSelectionParams(
+            languageCode: 'ko-KR', name: 'ko-KR-Wavenet-D'),
+        audioConfig:
+            tts.AudioConfig(audioEncoding: 'MP3', speakingRate: 0.9), // 속도 조절
       );
 
       final response = await ttsApi.text.synthesize(input);
@@ -81,7 +86,6 @@ class _WordLearningPageState extends State<WordLearningPage> {
       });
 
       await _playAudioFile(tempFile.path);
-
     } catch (e) {
       print('Error occurred: $e');
     }
@@ -92,7 +96,8 @@ class _WordLearningPageState extends State<WordLearningPage> {
     audioPlayer.onPlayerComplete.listen((event) async {
       playCount++;
       if (playCount < 2) {
-        await audioPlayer.play(DeviceFileSource(filePath)); // DeviceFileSource 사용
+        await audioPlayer
+            .play(DeviceFileSource(filePath)); // DeviceFileSource 사용
       } else {
         await Future.delayed(Duration(seconds: 1)); // 팝업을 더 길게 유지
         setState(() {
@@ -110,7 +115,8 @@ class _WordLearningPageState extends State<WordLearningPage> {
   }
 
   Future<void> _saveWord(int wordId) async {
-    final response = await http.post(Uri.parse('${ApiService.baseUrl}/words/$wordId/save/'));
+    final response =
+        await http.post(Uri.parse('${ApiService.baseUrl}/words/$wordId/save/'));
 
     if (response.statusCode == 200) {
       setState(() {
@@ -150,7 +156,9 @@ class _WordLearningPageState extends State<WordLearningPage> {
 
     // 업데이트된 단어 리스트 다시 불러오기
     final updatedWords = await ApiService().fetchWords(widget.chapterId);
-    final progress = updatedWords.where((word) => word.isCalled).length / updatedWords.length * 100;
+    final progress = updatedWords.where((word) => word.isCalled).length /
+        updatedWords.length *
+        100;
 
     Navigator.pushReplacement(
       context,
@@ -186,7 +194,8 @@ class _WordLearningPageState extends State<WordLearningPage> {
             return FutureBuilder<Chapter>(
               future: futureChapter,
               builder: (context, chapterSnapshot) {
-                if (chapterSnapshot.connectionState == ConnectionState.waiting) {
+                if (chapterSnapshot.connectionState ==
+                    ConnectionState.waiting) {
                   return Center(child: CircularProgressIndicator());
                 } else if (chapterSnapshot.hasError) {
                   return Center(child: Text('Failed to load chapter'));
@@ -204,15 +213,20 @@ class _WordLearningPageState extends State<WordLearningPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('#${chapter.id} #${chapter.title}', style: TextStyle(fontSize: 14)),
+                                Text('#${chapter.id} #${chapter.title}',
+                                    style: TextStyle(fontSize: 14)),
                                 SizedBox(height: 10),
                                 Image.asset(
                                   'assets/images/${currentWord.koreanWord}.png',
                                   width: double.infinity,
-                                  height: 200,
+                                  height: (MediaQuery.of(context).size.height *
+                                          0.26)
+                                      .clamp(140.0, 220.0)
+                                      .toDouble(),
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stackTrace) {
-                                    return Text('Error loading image', style: TextStyle(color: Colors.red));
+                                    return Text('Error loading image',
+                                        style: TextStyle(color: Colors.red));
                                   },
                                 ),
                                 SizedBox(height: 10),
@@ -220,18 +234,23 @@ class _WordLearningPageState extends State<WordLearningPage> {
                                   color: Colors.grey[200],
                                   child: Center(
                                     child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
-                                        Text(currentWord.koreanWord, style: TextStyle(fontSize: 24)),
-                                        Text(': ${currentWord.northKoreanWord}', style: TextStyle(fontSize: 18)),
+                                        Text(currentWord.koreanWord,
+                                            style: TextStyle(fontSize: 24)),
+                                        Text(': ${currentWord.northKoreanWord}',
+                                            style: TextStyle(fontSize: 18)),
                                       ],
                                     ),
                                   ),
                                 ),
                                 SizedBox(height: 10),
-                                Text('Greetings', style: TextStyle(fontSize: 16)),
+                                Text('Greetings',
+                                    style: TextStyle(fontSize: 16)),
                                 SizedBox(height: 5),
-                                Text('${words.length} words', style: TextStyle(fontSize: 14)),
+                                Text('${words.length} words',
+                                    style: TextStyle(fontSize: 14)),
                               ],
                             ),
                           ),
@@ -250,12 +269,21 @@ class _WordLearningPageState extends State<WordLearningPage> {
                                       _saveWord(currentWord.id);
                                     }
                                   },
-                                  child: Text(currentWord.isCorrect ? '저장됨' : '저장하기', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  child: Text(
+                                      currentWord.isCorrect ? '저장됨' : '저장하기',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold)),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: currentWord.isCorrect ? Colors.black : Colors.white,
-                                    foregroundColor: currentWord.isCorrect ? Colors.white : Colors.black,
+                                    backgroundColor: currentWord.isCorrect
+                                        ? Colors.black
+                                        : Colors.white,
+                                    foregroundColor: currentWord.isCorrect
+                                        ? Colors.white
+                                        : Colors.black,
                                     minimumSize: Size(double.infinity, 50),
-                                    side: currentWord.isCorrect ? null : BorderSide(color: Colors.black),
+                                    side: currentWord.isCorrect
+                                        ? null
+                                        : BorderSide(color: Colors.black),
                                   ),
                                 ),
                                 SizedBox(height: 10),
@@ -266,9 +294,12 @@ class _WordLearningPageState extends State<WordLearningPage> {
                                         currentIndex--;
                                       });
                                     },
-                                    child: Text('이전', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    child: Text('이전',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold)),
                                     style: ElevatedButton.styleFrom(
-                                      foregroundColor: Colors.black, backgroundColor: Colors.white,
+                                      foregroundColor: Colors.black,
+                                      backgroundColor: Colors.white,
                                       minimumSize: Size(double.infinity, 50),
                                       side: BorderSide(color: Colors.black),
                                     ),
@@ -279,9 +310,12 @@ class _WordLearningPageState extends State<WordLearningPage> {
                                     onPressed: () {
                                       _nextWord(words);
                                     },
-                                    child: Text('다음', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    child: Text('다음',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold)),
                                     style: ElevatedButton.styleFrom(
-                                      foregroundColor: Colors.black, backgroundColor: Colors.white,
+                                      foregroundColor: Colors.black,
+                                      backgroundColor: Colors.white,
                                       minimumSize: Size(double.infinity, 50),
                                       side: BorderSide(color: Colors.black),
                                     ),
@@ -289,7 +323,10 @@ class _WordLearningPageState extends State<WordLearningPage> {
                                 if (currentIndex == words.length - 1)
                                   ElevatedButton(
                                     onPressed: _completeLearning,
-                                    child: Text('완료하기', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                    child: Text('완료하기',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white)),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.black,
                                       minimumSize: Size(double.infinity, 50),
@@ -297,8 +334,12 @@ class _WordLearningPageState extends State<WordLearningPage> {
                                   ),
                                 SizedBox(height: 10),
                                 ElevatedButton(
-                                  onPressed: () => _playTextToSpeech(currentWord.koreanWord),
-                                  child: Text('음성 듣기', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                  onPressed: () =>
+                                      _playTextToSpeech(currentWord.koreanWord),
+                                  child: Text('음성 듣기',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white)),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.black,
                                     minimumSize: Size(double.infinity, 50),
@@ -317,7 +358,10 @@ class _WordLearningPageState extends State<WordLearningPage> {
                               padding: const EdgeInsets.all(16.0),
                               child: ElevatedButton(
                                 onPressed: _stopTextToSpeech,
-                                child: Text('듣기 중지하기', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                child: Text('듣기 중지하기',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white)),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.black,
                                   minimumSize: Size(double.infinity, 50),
@@ -328,9 +372,13 @@ class _WordLearningPageState extends State<WordLearningPage> {
                               ),
                             ),
                             Container(
-                              height: MediaQuery.of(context).size.height / 3,
+                              height:
+                                  (MediaQuery.of(context).size.height * 0.28)
+                                      .clamp(170.0, 260.0)
+                                      .toDouble(),
                               decoration: BoxDecoration(
-                                color: Colors.blue.withOpacity(1.0), // 완전히 불투명하게 설정
+                                color: Colors.blue
+                                    .withOpacity(1.0), // 완전히 불투명하게 설정
                                 borderRadius: BorderRadius.only(
                                   topLeft: Radius.circular(20),
                                   topRight: Radius.circular(20),
