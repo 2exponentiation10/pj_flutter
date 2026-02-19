@@ -12,7 +12,7 @@ import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:permission_handler/permission_handler.dart';
 import '../services/api_service.dart';
-import '../services/web_tts.dart';
+import '../services/tts_service.dart';
 import '../models/models.dart';
 import 'rouge_l.dart';
 import 'accent_learning_result_page.dart'; // 새로운 페이지 파일을 임포트합니다.
@@ -35,6 +35,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   bool isListening = false;
   bool isPlaying = false;
   String recognizedText = '';
+  String listeningStatusText = '직접 말하기를 눌러 음성 입력을 시작하세요.';
   int playCount = 0;
 
   @override
@@ -47,6 +48,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   }
 
   Future<void> _checkPermissions() async {
+    if (kIsWeb) return;
     if (await Permission.microphone.request().isGranted) {
       print('Microphone permission granted');
     } else {
@@ -70,7 +72,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
 
   Future<void> _playTextToSpeech(String text) async {
     if (kIsWeb) {
-      final ok = await speakOnWeb(text, rate: 0.9);
+      final ok = await TtsService.speak(text, rate: 0.9);
       if (ok) return;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -102,7 +104,12 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
 
       await _playAudioFile(tempFile.path);
     } catch (e) {
-      print('Error occurred: $e');
+      final fallbackOk = await TtsService.speak(text, rate: 0.9);
+      if (!fallbackOk && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('음성 재생에 실패했습니다.')),
+        );
+      }
     }
   }
 
@@ -195,6 +202,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
         setState(() {
           if (val == 'done' || val == 'notListening') {
             isListening = false;
+            listeningStatusText = '음성 입력이 종료되었습니다.';
           }
         });
       },
@@ -202,37 +210,57 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
         print('onError: $val');
         setState(() {
           isListening = false;
+          listeningStatusText = '음성 입력 오류: ${val.errorMsg}';
         });
       },
     );
     if (available) {
-      setState(() => isListening = true);
+      setState(() {
+        isListening = true;
+        recognizedText = '';
+        listeningStatusText = '음성 입력 중... 또박또박 말해 주세요.';
+      });
       _speech.listen(
         onResult: (val) {
           print('onResult: ${val.recognizedWords}');
           setState(() {
             recognizedText = val.recognizedWords;
-            _evaluateSpeech();
+            if (val.finalResult) {
+              listeningStatusText = '입력 완료. 평가 중...';
+              isListening = false;
+            }
           });
+          if (val.finalResult && val.recognizedWords.trim().isNotEmpty) {
+            _evaluateSpeech();
+          }
         },
-        listenFor: Duration(seconds: 5),
-        pauseFor: Duration(seconds: 3),
-        partialResults: false,
-        localeId: 'ko_KR',
+        listenFor: const Duration(seconds: 8),
+        pauseFor: const Duration(seconds: 3),
+        partialResults: true,
+        localeId: 'ko-KR',
         onSoundLevelChange: (level) {
           print('Sound level: $level');
         },
       );
     } else {
-      setState(() => isListening = false);
+      setState(() {
+        isListening = false;
+        listeningStatusText = '이 기기/브라우저에서 음성 입력을 사용할 수 없습니다.';
+      });
       _speech.stop();
     }
   }
 
   void _stopListening() {
     if (!isListening) return; // 이미 listening 상태가 아니면 return
-    setState(() => isListening = false);
+    setState(() {
+      isListening = false;
+      listeningStatusText = '음성 입력을 중지했습니다.';
+    });
     _speech.stop();
+    if (recognizedText.trim().isNotEmpty) {
+      _evaluateSpeech();
+    }
   }
 
   void _evaluateSpeech() {
@@ -359,6 +387,27 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                 SizedBox(height: 5),
                                 Text('${sentences.length} sentences',
                                     style: TextStyle(fontSize: 14)),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      isListening
+                                          ? Icons.mic_rounded
+                                          : Icons.mic_none_rounded,
+                                      color: isListening
+                                          ? Colors.redAccent
+                                          : Colors.black54,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        listeningStatusText,
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
                           ),

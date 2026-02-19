@@ -11,7 +11,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:animated_text_kit/animated_text_kit.dart';
 import '../services/api_service.dart';
-import '../services/web_tts.dart';
+import '../services/tts_service.dart';
 import '../models/models.dart';
 import 'evaluation_learning_result_page.dart';
 
@@ -57,7 +57,7 @@ class _WordLearningPageState extends State<WordLearningPage> {
 
   Future<void> _playTextToSpeech(String text) async {
     if (kIsWeb) {
-      final ok = await speakOnWeb(text, rate: 0.9);
+      final ok = await TtsService.speak(text, rate: 0.9);
       if (ok) return;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -90,7 +90,12 @@ class _WordLearningPageState extends State<WordLearningPage> {
 
       await _playAudioFile(tempFile.path);
     } catch (e) {
-      print('Error occurred: $e');
+      final fallbackOk = await TtsService.speak(text, rate: 0.9);
+      if (!fallbackOk && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('음성 재생에 실패했습니다.')),
+        );
+      }
     }
   }
 

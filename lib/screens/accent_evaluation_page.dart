@@ -1,5 +1,6 @@
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -28,6 +29,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   bool isListening = false;
   bool isEvaluatingAudio = false;
   String recognizedText = '';
+  String listeningStatusText = '직접 말하기를 눌러 음성 입력을 시작하세요.';
 
   List<AppSentence> sentences = [];
 
@@ -40,6 +42,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   }
 
   Future<void> _checkPermissions() async {
+    if (kIsWeb) return;
     await Permission.microphone.request();
   }
 
@@ -76,12 +79,18 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
     final available = await _speech.initialize(
       onStatus: (status) {
         if (status == 'done' || status == 'notListening') {
-          setState(() => isListening = false);
+          setState(() {
+            isListening = false;
+            listeningStatusText = '음성 입력이 종료되었습니다.';
+          });
           _evaluateRecognizedText();
         }
       },
       onError: (error) {
-        setState(() => isListening = false);
+        setState(() {
+          isListening = false;
+          listeningStatusText = '음성 입력 오류: ${error.errorMsg}';
+        });
         _showErrorDialog('음성 인식 오류: ${error.errorMsg}');
       },
     );
@@ -91,23 +100,33 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
       return;
     }
 
-    setState(() => isListening = true);
+    setState(() {
+      isListening = true;
+      recognizedText = '';
+      listeningStatusText = '음성 입력 중... 또박또박 말해 주세요.';
+    });
     _speech.listen(
       onResult: (val) {
         setState(() {
           recognizedText = val.recognizedWords;
+          if (val.finalResult) {
+            listeningStatusText = '입력 완료. 평가 중...';
+          }
         });
       },
       listenFor: const Duration(seconds: 6),
       pauseFor: const Duration(seconds: 3),
-      partialResults: false,
-      localeId: 'ko_KR',
+      partialResults: true,
+      localeId: 'ko-KR',
     );
   }
 
   void _stopListening() {
     if (!isListening) return;
-    setState(() => isListening = false);
+    setState(() {
+      isListening = false;
+      listeningStatusText = '음성 입력을 중지했습니다.';
+    });
     _speech.stop();
   }
 
@@ -309,6 +328,27 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
                             const SizedBox(height: 10),
                             Text('인식 결과: $recognizedText',
                                 style: const TextStyle(fontSize: 14)),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(
+                                  isListening
+                                      ? Icons.mic_rounded
+                                      : Icons.mic_none_rounded,
+                                  color: isListening
+                                      ? Colors.redAccent
+                                      : Colors.black54,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    listeningStatusText,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),

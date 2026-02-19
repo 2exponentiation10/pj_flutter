@@ -15,6 +15,13 @@ Future<bool> speakOnWeb(String text, {double rate = 0.9}) async {
   final utterance = html.SpeechSynthesisUtterance(normalized)
     ..lang = 'ko-KR'
     ..rate = rate;
+  final voices = synth.getVoices();
+  for (final voice in voices) {
+    if ((voice.lang ?? '').toLowerCase().startsWith('ko')) {
+      utterance.voice = voice;
+      break;
+    }
+  }
   synth.speak(utterance);
   return true;
 }
