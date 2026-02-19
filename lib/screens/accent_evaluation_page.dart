@@ -8,6 +8,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/browser_capability.dart';
+import '../widgets/voice_curve_compare_chart.dart';
 import 'accent_evaluation_result_page.dart';
 
 class AccentEvaluationPage extends StatefulWidget {
@@ -256,44 +257,92 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('발음 평가 결과'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('점수: ${result.scorePercent.toStringAsFixed(2)}%'),
-            const SizedBox(height: 6),
-            Text('등급: ${result.scoreLevel.isEmpty ? '-' : result.scoreLevel}'),
-            const SizedBox(height: 6),
-            Text(
-                '문자 유사도: ${(result.charSimilarity * 100).toStringAsFixed(1)}%'),
-            Text(
-                '핵심 단어 일치율: ${(result.tokenSimilarity * 100).toStringAsFixed(1)}%'),
-            const SizedBox(height: 6),
-            Text('텍스트 점수: ${(result.textScore * 100).toStringAsFixed(1)}%'),
-            if (result.audioMetricsAvailable) ...[
-              const SizedBox(height: 6),
-              Text(
-                  '속도 점수: ${((result.speedScore ?? 0) * 100).toStringAsFixed(1)}%'),
-              Text(
-                  '피치 점수: ${((result.pitchScore ?? 0) * 100).toStringAsFixed(1)}%'),
-              Text(
-                  '음성 길이: ${(result.audioDurationSec ?? 0).toStringAsFixed(2)}초 / 말속도: ${(result.syllablesPerSec ?? 0).toStringAsFixed(2)}음절/초'),
-              Text(
-                  '피치 중앙값: ${(result.pitchMedianHz ?? 0).toStringAsFixed(1)}Hz / 변동성: ${(result.pitchStdHz ?? 0).toStringAsFixed(1)}Hz'),
-            ],
-            Text('전사: ${result.transcript}'),
-            const SizedBox(height: 6),
-            Text('피드백: ${result.feedback}'),
-            const SizedBox(height: 6),
-            Text(
-              result.audioMetricsAvailable
-                  ? '평가 기준: 텍스트 60% + 속도 20% + 피치 20%'
-                  : '평가 기준: 문자 유사도 75% + 핵심 단어 일치율 25%',
-              style: const TextStyle(fontSize: 12),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('점수: ${result.scorePercent.toStringAsFixed(2)}%'),
+                const SizedBox(height: 6),
+                Text(
+                    '등급: ${result.scoreLevel.isEmpty ? '-' : result.scoreLevel}'),
+                const SizedBox(height: 6),
+                Text(
+                    '문자 유사도: ${(result.charSimilarity * 100).toStringAsFixed(1)}%'),
+                Text(
+                    '핵심 단어 일치율: ${(result.tokenSimilarity * 100).toStringAsFixed(1)}%'),
+                const SizedBox(height: 6),
+                Text('텍스트 점수: ${(result.textScore * 100).toStringAsFixed(1)}%'),
+                if (result.audioMetricsAvailable) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                      '속도 점수: ${((result.speedScore ?? 0) * 100).toStringAsFixed(1)}%'),
+                  Text(
+                      '피치 점수: ${((result.pitchScore ?? 0) * 100).toStringAsFixed(1)}%'),
+                  Text(
+                      '음성 길이: ${(result.audioDurationSec ?? 0).toStringAsFixed(2)}초 / 말속도: ${(result.syllablesPerSec ?? 0).toStringAsFixed(2)}음절/초'),
+                  Text(
+                      '피치 중앙값: ${(result.pitchMedianHz ?? 0).toStringAsFixed(1)}Hz / 변동성: ${(result.pitchStdHz ?? 0).toStringAsFixed(1)}Hz'),
+                  if (result.pitchCurveSimilarity != null)
+                    Text(
+                      '피치 유사도: ${(result.pitchCurveSimilarity! * 100).toStringAsFixed(1)}%',
+                    ),
+                  if (result.volumeCurveSimilarity != null)
+                    Text(
+                      '음량 유사도: ${(result.volumeCurveSimilarity! * 100).toStringAsFixed(1)}%',
+                    ),
+                  if (result.referencePitchCurve.isNotEmpty &&
+                      result.userPitchCurve.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    const Text('피치 곡선 비교',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      height: 120,
+                      child: VoiceCurveCompareChart(
+                        referenceCurve: result.referencePitchCurve,
+                        userCurve: result.userPitchCurve,
+                        referenceLabel: '기준 TTS',
+                        userLabel: '내 입력',
+                      ),
+                    ),
+                  ],
+                  if (result.referenceVolumeCurve.isNotEmpty &&
+                      result.userVolumeCurve.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    const Text('음량 곡선 비교',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      height: 120,
+                      child: VoiceCurveCompareChart(
+                        referenceCurve: result.referenceVolumeCurve,
+                        userCurve: result.userVolumeCurve,
+                        referenceLabel: '기준 TTS',
+                        userLabel: '내 입력',
+                      ),
+                    ),
+                  ],
+                ],
+                const SizedBox(height: 8),
+                Text('전사: ${result.transcript}'),
+                const SizedBox(height: 6),
+                Text('피드백: ${result.feedback}'),
+                const SizedBox(height: 6),
+                Text(
+                  result.audioMetricsAvailable
+                      ? '평가 기준: 텍스트 60% + 속도 20% + 피치 20%'
+                      : '평가 기준: 문자 유사도 75% + 핵심 단어 일치율 25%',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 6),
+                Text('모델: ${result.model}',
+                    style: const TextStyle(fontSize: 12)),
+              ],
             ),
-            const SizedBox(height: 6),
-            Text('모델: ${result.model}', style: const TextStyle(fontSize: 12)),
-          ],
+          ),
         ),
         actions: [
           TextButton(

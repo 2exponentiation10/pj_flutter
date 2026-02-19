@@ -161,6 +161,12 @@ class PronunciationEvaluationResult {
   final double? syllablesPerSec;
   final double? pitchMedianHz;
   final double? pitchStdHz;
+  final List<double> userPitchCurve;
+  final List<double> userVolumeCurve;
+  final List<double> referencePitchCurve;
+  final List<double> referenceVolumeCurve;
+  final double? pitchCurveSimilarity;
+  final double? volumeCurveSimilarity;
 
   PronunciationEvaluationResult({
     required this.transcript,
@@ -180,7 +186,21 @@ class PronunciationEvaluationResult {
     this.syllablesPerSec,
     this.pitchMedianHz,
     this.pitchStdHz,
+    this.userPitchCurve = const [],
+    this.userVolumeCurve = const [],
+    this.referencePitchCurve = const [],
+    this.referenceVolumeCurve = const [],
+    this.pitchCurveSimilarity,
+    this.volumeCurveSimilarity,
   });
+
+  static List<double> _toDoubleList(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<num>()
+        .map((e) => e.toDouble())
+        .toList(growable: false);
+  }
 
   factory PronunciationEvaluationResult.fromJson(Map<String, dynamic> json) {
     return PronunciationEvaluationResult(
@@ -215,6 +235,16 @@ class PronunciationEvaluationResult {
       pitchStdHz: json['pitch_std_hz'] == null
           ? null
           : (json['pitch_std_hz'] as num).toDouble(),
+      userPitchCurve: _toDoubleList(json['user_pitch_curve']),
+      userVolumeCurve: _toDoubleList(json['user_volume_curve']),
+      referencePitchCurve: _toDoubleList(json['reference_pitch_curve']),
+      referenceVolumeCurve: _toDoubleList(json['reference_volume_curve']),
+      pitchCurveSimilarity: json['pitch_curve_similarity'] == null
+          ? null
+          : (json['pitch_curve_similarity'] as num).toDouble(),
+      volumeCurveSimilarity: json['volume_curve_similarity'] == null
+          ? null
+          : (json['volume_curve_similarity'] as num).toDouble(),
     );
   }
 }
