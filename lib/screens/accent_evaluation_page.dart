@@ -70,6 +70,28 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
     );
   }
 
+  Future<void> _resetCurrentSentenceAttempts() async {
+    if (sentences.isEmpty) return;
+    final sentenceId = sentences[currentIndex].id;
+    try {
+      final result = await _api.resetSentencePronunciation(sentenceId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '기록 초기화 완료: ${result['deleted_attempts'] ?? 0}개 삭제',
+          ),
+        ),
+      );
+      setState(() {
+        futureSentences = _api.fetchSentences(widget.chapterId);
+        recognizedText = '';
+      });
+    } catch (e) {
+      _showErrorDialog('기록 초기화 실패: $e');
+    }
+  }
+
   void _nextSentence() {
     setState(() {
       if (currentIndex < sentences.length - 1) {
@@ -293,6 +315,14 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
                     Text(
                       '음량 유사도: ${(result.volumeCurveSimilarity! * 100).toStringAsFixed(1)}%',
                     ),
+                  if (result.pitchVerdict.isNotEmpty)
+                    Text('피치 판정: ${result.pitchVerdict}'),
+                  if (result.sentenceAttemptsCount != null)
+                    Text('누적 시도: ${result.sentenceAttemptsCount}회'),
+                  if (result.sentenceBestScore != null)
+                    Text(
+                      '최고 점수: ${result.sentenceBestScore!.toStringAsFixed(2)}%',
+                    ),
                   if (result.referencePitchCurve.isNotEmpty &&
                       result.userPitchCurve.isNotEmpty) ...[
                     const SizedBox(height: 10),
@@ -390,6 +420,11 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
       appBar: AppBar(
         title: const Text('Accent Evaluation'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: '현재 문장 평가기록 초기화',
+            onPressed: _resetCurrentSentenceAttempts,
+          ),
           IconButton(
             icon: const Icon(Icons.check),
             onPressed: _completeEvaluation,

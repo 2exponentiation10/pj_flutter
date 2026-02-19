@@ -167,6 +167,10 @@ class PronunciationEvaluationResult {
   final List<double> referenceVolumeCurve;
   final double? pitchCurveSimilarity;
   final double? volumeCurveSimilarity;
+  final String pitchVerdict;
+  final int? attemptId;
+  final int? sentenceAttemptsCount;
+  final double? sentenceBestScore;
 
   PronunciationEvaluationResult({
     required this.transcript,
@@ -192,6 +196,10 @@ class PronunciationEvaluationResult {
     this.referenceVolumeCurve = const [],
     this.pitchCurveSimilarity,
     this.volumeCurveSimilarity,
+    this.pitchVerdict = '',
+    this.attemptId,
+    this.sentenceAttemptsCount,
+    this.sentenceBestScore,
   });
 
   static List<double> _toDoubleList(dynamic value) {
@@ -245,6 +253,16 @@ class PronunciationEvaluationResult {
       volumeCurveSimilarity: json['volume_curve_similarity'] == null
           ? null
           : (json['volume_curve_similarity'] as num).toDouble(),
+      pitchVerdict: (json['pitch_verdict'] ?? '').toString(),
+      attemptId: json['attempt_id'] == null
+          ? null
+          : (json['attempt_id'] as num).toInt(),
+      sentenceAttemptsCount: json['sentence_attempts_count'] == null
+          ? null
+          : (json['sentence_attempts_count'] as num).toInt(),
+      sentenceBestScore: json['sentence_best_score'] == null
+          ? null
+          : (json['sentence_best_score'] as num).toDouble(),
     );
   }
 }

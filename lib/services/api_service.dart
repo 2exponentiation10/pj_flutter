@@ -209,6 +209,20 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> resetSentencePronunciation(
+      int sentenceId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/sentences/$sentenceId/reset_pronunciation/'),
+      headers: {"Content-Type": "application/json; charset=UTF-8"},
+    );
+
+    if (response.statusCode == 200) {
+      return json.decode(utf8.decode(response.bodyBytes))
+          as Map<String, dynamic>;
+    }
+    throw Exception('Failed to reset pronunciation attempts');
+  }
+
   Future<ProgressData> fetchProgressData() async {
     final response = await http.get(
       Uri.parse('$baseUrl/get_progress/'),
