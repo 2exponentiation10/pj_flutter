@@ -10,6 +10,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/browser_capability.dart';
+import '../services/live_audio_analyzer.dart';
 import '../widgets/voice_curve_compare_chart.dart';
 import 'accent_evaluation_result_page.dart';
 
@@ -28,6 +29,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
 
   late stt.SpeechToText _speech;
   final _api = ApiService();
+  late final LiveAudioAnalyzer _liveAudioAnalyzer;
 
   int currentIndex = 0;
   bool isListening = false;
@@ -55,6 +57,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
     futureSentences = _api.fetchSentences(widget.chapterId);
     futureChapter = _api.fetchChapter(widget.chapterId);
     _speech = stt.SpeechToText();
+    _liveAudioAnalyzer = createLiveAudioAnalyzer();
     if (kIsWeb) {
       speechRecognitionSupported = hasWebSpeechRecognition;
       if (!speechRecognitionSupported) {
@@ -135,6 +138,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
             isListening = false;
             listeningStatusText = '음성 입력이 종료되었습니다.';
           });
+          _stopLiveAudioAnalyzerIfPossible();
           _finalizeAndEvaluate();
         }
       },
@@ -143,6 +147,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
           isListening = false;
           listeningStatusText = '음성 입력 오류: ${error.errorMsg}';
         });
+        _stopLiveAudioAnalyzerIfPossible();
         _stopWebMicRecordingIfPossible();
         _showErrorDialog('음성 인식 오류: ${error.errorMsg}');
       },
@@ -171,6 +176,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
       _liveSpeedEstimate = 0;
       _livePitchEstimateHz = 0;
     });
+    await _startLiveAudioAnalyzerIfPossible();
     _speech.listen(
       onResult: (val) {
         setState(() {
@@ -183,7 +189,9 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
       listenFor: const Duration(seconds: 6),
       pauseFor: const Duration(seconds: 3),
       localeId: 'ko-KR',
-      onSoundLevelChange: _onSoundLevelChange,
+      onSoundLevelChange: (level) {
+        if (!kIsWeb) _onSoundLevelChange(level);
+      },
       listenOptions: stt.SpeechListenOptions(partialResults: true),
     );
   }
@@ -194,8 +202,29 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
       isListening = false;
       listeningStatusText = '음성 입력을 중지했습니다.';
     });
+    await _stopLiveAudioAnalyzerIfPossible();
     await _speech.stop();
     await _finalizeAndEvaluate();
+  }
+
+  Future<void> _startLiveAudioAnalyzerIfPossible() async {
+    if (!kIsWeb) return;
+    await _liveAudioAnalyzer.start((stats) {
+      if (!mounted || !isListening) return;
+      setState(() {
+        _liveSpeedEstimate = stats.syllablesPerSec;
+        _livePitchEstimateHz = stats.pitchHz;
+        _liveInputCurve.add(stats.levelNorm);
+        if (_liveInputCurve.length > 64) {
+          _liveInputCurve.removeAt(0);
+        }
+      });
+    });
+  }
+
+  Future<void> _stopLiveAudioAnalyzerIfPossible() async {
+    if (!kIsWeb) return;
+    await _liveAudioAnalyzer.stop();
   }
 
   void _onSoundLevelChange(double level) {
@@ -271,6 +300,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
       if (mounted) {
         setState(() => isEvaluatingAudio = true);
       }
+      await _stopLiveAudioAnalyzerIfPossible();
       await _stopWebMicRecordingIfPossible();
       await _evaluateRecognizedText(audioBytes: _webAudioBytes);
     } finally {
@@ -465,6 +495,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   @override
   void dispose() {
     _speech.stop();
+    _liveAudioAnalyzer.dispose();
     _webMicRecorder?.dispose();
     super.dispose();
   }
