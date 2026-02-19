@@ -54,6 +54,11 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   final List<double> _liveInputCurve = [];
   double _soundLevelMin = 0;
   double _soundLevelMax = 0;
+  DateTime? _listenStartedAt;
+  DateTime? _lastSoundAt;
+  int _activeFrames = 0;
+  double _liveSpeedEstimate = 0;
+  double _livePitchEstimateHz = 0;
 
   int playCount = 0;
 
@@ -278,6 +283,11 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       _liveInputCurve.clear();
       _soundLevelMin = 0;
       _soundLevelMax = 0;
+      _listenStartedAt = DateTime.now();
+      _lastSoundAt = null;
+      _activeFrames = 0;
+      _liveSpeedEstimate = 0;
+      _livePitchEstimateHz = 0;
     });
 
     _speech.listen(
@@ -323,6 +333,24 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     }
     final denom = (_soundLevelMax - _soundLevelMin).abs() + 0.0001;
     final normalized = ((l - _soundLevelMin) / denom).clamp(0.0, 1.0);
+    final now = DateTime.now();
+    if (normalized > 0.24) {
+      _activeFrames += 1;
+    }
+    if (_listenStartedAt != null) {
+      final elapsedSec =
+          now.difference(_listenStartedAt!).inMilliseconds / 1000.0;
+      if (elapsedSec > 0) {
+        _liveSpeedEstimate = (_activeFrames / elapsedSec).clamp(0.0, 8.0);
+      }
+    }
+    if (_lastSoundAt != null) {
+      final dtSec = (now.difference(_lastSoundAt!).inMilliseconds / 1000.0)
+          .clamp(0.001, 1.0);
+      final hz = (1.0 / (dtSec * 2.0)).clamp(60.0, 420.0);
+      _livePitchEstimateHz = 0.85 * _livePitchEstimateHz + 0.15 * hz;
+    }
+    _lastSoundAt = now;
     if (!mounted) return;
     setState(() {
       _liveInputCurve.add(normalized);
@@ -368,9 +396,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
         setState(() => isEvaluatingAudio = true);
       }
       await _stopWebMicRecordingIfPossible();
-      if (recognizedText.trim().isNotEmpty) {
-        await _evaluateSpeech(audioBytes: _webAudioBytes);
-      }
+      await _evaluateSpeech(audioBytes: _webAudioBytes);
     } finally {
       if (mounted) {
         setState(() => isEvaluatingAudio = false);
@@ -380,9 +406,8 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   }
 
   Future<void> _evaluateSpeech({Uint8List? audioBytes}) async {
-    final recognized = recognizedText.trim();
-    if (recognized.isEmpty) {
-      _showErrorDialog('인식된 텍스트가 없습니다. 다시 시도해 주세요.');
+    if (audioBytes == null || audioBytes.isEmpty) {
+      _showErrorDialog('녹음된 음성이 없습니다. 다시 시도해 주세요.');
       return;
     }
 
@@ -393,7 +418,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       final result = await _api.evaluatePronunciation(
         sentenceId: current.id,
         referenceText: current.koreanSentence,
-        recognizedText: recognized,
+        recognizedText: '',
         audioBytes: audioBytes,
         fileName: 'mic_input',
         contentType: _detectAudioContentType(audioBytes),
@@ -448,17 +473,8 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                 children: [
                   Text('점수: ${result.scorePercent.toStringAsFixed(2)}%'),
                   const SizedBox(height: 8),
-                  Text('전사: ${result.transcript}'),
-                  const SizedBox(height: 8),
                   Text('피드백: ${result.feedback}'),
                   const SizedBox(height: 8),
-                  Text(
-                      '문자 유사도: ${(result.charSimilarity * 100).toStringAsFixed(1)}%'),
-                  Text(
-                      '핵심 단어 일치율: ${(result.tokenSimilarity * 100).toStringAsFixed(1)}%'),
-                  const SizedBox(height: 8),
-                  Text(
-                      '텍스트 점수: ${(result.textScore * 100).toStringAsFixed(1)}%'),
                   if (result.audioMetricsAvailable) ...[
                     const SizedBox(height: 8),
                     Text(
@@ -466,7 +482,9 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                     Text(
                         '피치 점수: ${((result.pitchScore ?? 0) * 100).toStringAsFixed(1)}%'),
                     Text(
-                        '음성 길이: ${(result.audioDurationSec ?? 0).toStringAsFixed(2)}초 / 말속도: ${(result.syllablesPerSec ?? 0).toStringAsFixed(2)}음절/초'),
+                        '음량 점수: ${((result.volumeScore ?? 0) * 100).toStringAsFixed(1)}%'),
+                    Text(
+                        '음성 길이(내/기준): ${(result.audioDurationSec ?? 0).toStringAsFixed(2)}초 / ${(result.referenceDurationSec ?? 0).toStringAsFixed(2)}초'),
                     Text(
                         '피치 중앙값: ${(result.pitchMedianHz ?? 0).toStringAsFixed(1)}Hz / 변동성: ${(result.pitchStdHz ?? 0).toStringAsFixed(1)}Hz'),
                     if (result.pitchCurveSimilarity != null)
@@ -519,11 +537,9 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                     ],
                     const SizedBox(height: 8),
                   ],
-                  Text(
-                    result.audioMetricsAvailable
-                        ? '평가 기준: 텍스트 60% + 속도 20% + 피치 20%'
-                        : '평가 기준: 문자 유사도 75% + 핵심 단어 일치율 25%',
-                    style: const TextStyle(fontSize: 12),
+                  const Text(
+                    '평가 기준: 피치 45% + 속도 35% + 음량 20% (음성 직접 비교)',
+                    style: TextStyle(fontSize: 12),
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -710,6 +726,11 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                             if (_liveInputCurve.length > 2) ...[
                               const SizedBox(height: 10),
                               const Text('입력 음성 형태(실시간 레벨)'),
+                              const SizedBox(height: 4),
+                              Text(
+                                '실시간 속도 추정: ${_liveSpeedEstimate.toStringAsFixed(2)} / 피치 추정: ${_livePitchEstimateHz.toStringAsFixed(0)}Hz',
+                                style: const TextStyle(fontSize: 12),
+                              ),
                               const SizedBox(height: 6),
                               SizedBox(
                                 height: 90,
@@ -742,7 +763,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                   ),
                                   SizedBox(height: 6),
                                   Text(
-                                    '직접 말하기(마이크): 텍스트 60% + 속도 20% + 피치 20%',
+                                    '직접 말하기(마이크): 피치 45% + 속도 35% + 음량 20%',
                                     style: TextStyle(fontSize: 12),
                                   ),
                                 ],

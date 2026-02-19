@@ -157,7 +157,9 @@ class PronunciationEvaluationResult {
   final bool audioMetricsAvailable;
   final double? speedScore;
   final double? pitchScore;
+  final double? volumeScore;
   final double? audioDurationSec;
+  final double? referenceDurationSec;
   final double? syllablesPerSec;
   final double? pitchMedianHz;
   final double? pitchStdHz;
@@ -186,7 +188,9 @@ class PronunciationEvaluationResult {
     required this.audioMetricsAvailable,
     this.speedScore,
     this.pitchScore,
+    this.volumeScore,
     this.audioDurationSec,
+    this.referenceDurationSec,
     this.syllablesPerSec,
     this.pitchMedianHz,
     this.pitchStdHz,
@@ -231,9 +235,15 @@ class PronunciationEvaluationResult {
       pitchScore: json['pitch_score'] == null
           ? null
           : (json['pitch_score'] as num).toDouble(),
+      volumeScore: json['volume_score'] == null
+          ? null
+          : (json['volume_score'] as num).toDouble(),
       audioDurationSec: json['audio_duration_sec'] == null
           ? null
           : (json['audio_duration_sec'] as num).toDouble(),
+      referenceDurationSec: json['reference_duration_sec'] == null
+          ? null
+          : (json['reference_duration_sec'] as num).toDouble(),
       syllablesPerSec: json['syllables_per_sec'] == null
           ? null
           : (json['syllables_per_sec'] as num).toDouble(),
