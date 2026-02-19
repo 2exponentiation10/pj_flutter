@@ -1,73 +1,84 @@
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:animated_text_kit/animated_text_kit.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:googleapis_auth/auth_io.dart';
-import 'package:googleapis/texttospeech/v1.dart' as tts;
-import 'package:path_provider/path_provider.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:animated_text_kit/animated_text_kit.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:googleapis/texttospeech/v1.dart' as tts;
+import 'package:googleapis_auth/auth_io.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../services/api_service.dart';
-import '../services/tts_service.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+
 import '../models/models.dart';
-import 'rouge_l.dart';
-import 'accent_learning_result_page.dart'; // 새로운 페이지 파일을 임포트합니다.
+import '../services/api_service.dart';
+import '../services/browser_capability.dart';
+import '../services/tts_service.dart';
+import 'accent_learning_result_page.dart';
 
 class AccentLearningPage extends StatefulWidget {
   final int chapterId;
 
-  AccentLearningPage({required this.chapterId});
+  const AccentLearningPage({required this.chapterId, super.key});
 
   @override
-  _AccentLearningPageState createState() => _AccentLearningPageState();
+  State<AccentLearningPage> createState() => _AccentLearningPageState();
 }
 
 class _AccentLearningPageState extends State<AccentLearningPage> {
   late Future<List<AppSentence>> futureSentences;
   late Future<Chapter> futureChapter;
+  final ApiService _api = ApiService();
+
   int currentIndex = 0;
   late AudioPlayer audioPlayer;
   late stt.SpeechToText _speech;
+
   bool isListening = false;
   bool isPlaying = false;
+  bool isEvaluatingAudio = false;
+  bool isEvaluatingManualText = false;
+  bool speechRecognitionSupported = true;
+
   String recognizedText = '';
   String listeningStatusText = '직접 말하기를 눌러 음성 입력을 시작하세요.';
+  final TextEditingController _manualController = TextEditingController();
+
   int playCount = 0;
 
   @override
   void initState() {
     super.initState();
-    futureSentences = ApiService().fetchSentences(widget.chapterId);
-    futureChapter = ApiService().fetchChapter(widget.chapterId);
+    futureSentences = _api.fetchSentences(widget.chapterId);
+    futureChapter = _api.fetchChapter(widget.chapterId);
     audioPlayer = AudioPlayer();
     _speech = stt.SpeechToText();
+
+    if (kIsWeb) {
+      speechRecognitionSupported = hasWebSpeechRecognition;
+      if (!speechRecognitionSupported) {
+        listeningStatusText = isLikelySafari
+            ? 'Safari에서는 웹 음성 입력이 제한될 수 있습니다. 텍스트 입력/오디오 업로드를 사용해 주세요.'
+            : '현재 브라우저에서 웹 음성 입력을 사용할 수 없습니다.';
+      }
+    }
   }
 
   Future<void> _checkPermissions() async {
     if (kIsWeb) return;
-    if (await Permission.microphone.request().isGranted) {
-      print('Microphone permission granted');
-    } else {
-      print('Microphone permission denied');
-    }
+    await Permission.microphone.request();
   }
 
   Future<AutoRefreshingAuthClient> _getAuthClient() async {
-    try {
-      final serviceAccountJson =
-          await rootBundle.loadString('assets/service_account.json');
-      final credentials =
-          ServiceAccountCredentials.fromJson(serviceAccountJson);
-      final scopes = [tts.TexttospeechApi.cloudPlatformScope];
-      return clientViaServiceAccount(credentials, scopes);
-    } catch (e) {
-      print('Error loading service account credentials: $e');
-      rethrow;
-    }
+    final serviceAccountJson =
+        await rootBundle.loadString('assets/service_account.json');
+    final credentials = ServiceAccountCredentials.fromJson(serviceAccountJson);
+    final scopes = [tts.TexttospeechApi.cloudPlatformScope];
+    return clientViaServiceAccount(credentials, scopes);
   }
 
   Future<void> _playTextToSpeech(String text) async {
@@ -76,10 +87,11 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       if (ok) return;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('웹 브라우저 TTS를 사용할 수 없습니다.')),
+        const SnackBar(content: Text('웹 브라우저 TTS를 사용할 수 없습니다.')),
       );
       return;
     }
+
     try {
       final authClient = await _getAuthClient();
       final ttsApi = tts.TexttospeechApi(authClient);
@@ -87,7 +99,9 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       final input = tts.SynthesizeSpeechRequest(
         input: tts.SynthesisInput(text: text),
         voice: tts.VoiceSelectionParams(
-            languageCode: 'ko-KR', name: 'ko-KR-Wavenet-D'),
+          languageCode: 'ko-KR',
+          name: 'ko-KR-Wavenet-D',
+        ),
         audioConfig: tts.AudioConfig(audioEncoding: 'MP3', speakingRate: 0.9),
       );
 
@@ -103,7 +117,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       });
 
       await _playAudioFile(tempFile.path);
-    } catch (e) {
+    } catch (_) {
       final fallbackOk = await TtsService.speak(text, rate: 0.9);
       if (!fallbackOk && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -114,25 +128,17 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   }
 
   Future<void> _playAudioFile(String filePath) async {
-    await audioPlayer.play(DeviceFileSource(filePath)); // 반환값을 확인할 필요 없음
+    await audioPlayer.play(DeviceFileSource(filePath));
 
-    audioPlayer.onPlayerComplete.listen((event) async {
+    audioPlayer.onPlayerComplete.listen((_) async {
       playCount++;
       if (playCount < 2) {
         await audioPlayer.play(DeviceFileSource(filePath));
       } else {
-        await Future.delayed(Duration(seconds: 1)); // 팝업을 더 길게 유지
-        setState(() {
-          isPlaying = false;
-        });
+        await Future.delayed(const Duration(seconds: 1));
+        if (!mounted) return;
+        setState(() => isPlaying = false);
       }
-    });
-  }
-
-  Future<void> _stopTextToSpeech() async {
-    await audioPlayer.stop();
-    setState(() {
-      isPlaying = false;
     });
   }
 
@@ -147,13 +153,14 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
           return sentences;
         });
       });
-    } else {
-      throw Exception('Failed to save sentence');
+      return;
     }
+
+    throw Exception('Failed to save sentence');
   }
 
   Future<void> _updateSentenceIsCalled(int sentenceId) async {
-    await ApiService().updateSentenceIsCalled(sentenceId);
+    await _api.updateSentenceIsCalled(sentenceId);
   }
 
   void _nextSentence(List<AppSentence> sentences) async {
@@ -166,21 +173,21 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   }
 
   void _completeLearning() async {
-    final sentences = await ApiService().fetchSentences(widget.chapterId);
+    final sentences = await _api.fetchSentences(widget.chapterId);
 
-    for (var sentence in sentences) {
+    for (final sentence in sentences) {
       if (!sentence.isCalled) {
-        await ApiService().updateSentenceIsCalled(sentence.id);
+        await _api.updateSentenceIsCalled(sentence.id);
       }
     }
 
-    final updatedSentences =
-        await ApiService().fetchSentences(widget.chapterId);
+    final updatedSentences = await _api.fetchSentences(widget.chapterId);
     final progress =
         updatedSentences.where((sentence) => sentence.isCalled).length /
             updatedSentences.length *
             100;
 
+    if (!mounted) return;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -193,12 +200,17 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     );
   }
 
-  void _startListening() async {
-    await _checkPermissions(); // 권한 확인
+  Future<void> _startListening() async {
+    if (kIsWeb && !speechRecognitionSupported) {
+      _showErrorDialog('이 브라우저에서는 음성 입력이 제한됩니다. 텍스트 입력 또는 음성 파일 업로드를 사용해 주세요.');
+      return;
+    }
 
-    bool available = await _speech.initialize(
+    await _checkPermissions();
+
+    final available = await _speech.initialize(
       onStatus: (val) {
-        print('onStatus: $val');
+        if (!mounted) return;
         setState(() {
           if (val == 'done' || val == 'notListening') {
             isListening = false;
@@ -207,97 +219,207 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
         });
       },
       onError: (val) {
-        print('onError: $val');
+        if (!mounted) return;
         setState(() {
           isListening = false;
           listeningStatusText = '음성 입력 오류: ${val.errorMsg}';
         });
       },
     );
-    if (available) {
-      setState(() {
-        isListening = true;
-        recognizedText = '';
-        listeningStatusText = '음성 입력 중... 또박또박 말해 주세요.';
-      });
-      _speech.listen(
-        onResult: (val) {
-          print('onResult: ${val.recognizedWords}');
-          setState(() {
-            recognizedText = val.recognizedWords;
-            if (val.finalResult) {
-              listeningStatusText = '입력 완료. 평가 중...';
-              isListening = false;
-            }
-          });
-          if (val.finalResult && val.recognizedWords.trim().isNotEmpty) {
-            _evaluateSpeech();
-          }
-        },
-        listenFor: const Duration(seconds: 8),
-        pauseFor: const Duration(seconds: 3),
-        partialResults: true,
-        localeId: 'ko-KR',
-        onSoundLevelChange: (level) {
-          print('Sound level: $level');
-        },
-      );
-    } else {
+
+    if (!available) {
+      if (!mounted) return;
       setState(() {
         isListening = false;
-        listeningStatusText = '이 기기/브라우저에서 음성 입력을 사용할 수 없습니다.';
+        speechRecognitionSupported = false;
+        listeningStatusText = '음성 입력 초기화에 실패했습니다. 텍스트 입력/오디오 업로드를 사용해 주세요.';
       });
-      _speech.stop();
+      await _speech.stop();
+      return;
     }
+
+    setState(() {
+      isListening = true;
+      recognizedText = '';
+      listeningStatusText = '음성 입력 중... 또박또박 말해 주세요.';
+    });
+
+    _speech.listen(
+      onResult: (val) {
+        if (!mounted) return;
+        setState(() {
+          recognizedText = val.recognizedWords;
+          if (val.finalResult) {
+            listeningStatusText = '입력 완료. 평가 중...';
+            isListening = false;
+          }
+        });
+        if (val.finalResult && val.recognizedWords.trim().isNotEmpty) {
+          _evaluateSpeech();
+        }
+      },
+      listenFor: const Duration(seconds: 8),
+      pauseFor: const Duration(seconds: 3),
+      localeId: 'ko-KR',
+      listenOptions: stt.SpeechListenOptions(partialResults: true),
+    );
   }
 
-  void _stopListening() {
-    if (!isListening) return; // 이미 listening 상태가 아니면 return
+  Future<void> _stopListening() async {
+    if (!isListening) return;
     setState(() {
       isListening = false;
       listeningStatusText = '음성 입력을 중지했습니다.';
     });
-    _speech.stop();
+    await _speech.stop();
     if (recognizedText.trim().isNotEmpty) {
-      _evaluateSpeech();
+      await _evaluateSpeech();
     }
   }
 
-  void _evaluateSpeech() {
-    futureSentences.then((sentences) {
-      final referenceText = sentences[currentIndex].koreanSentence;
-      final result = calculateRougeL(referenceText, recognizedText);
-      final score = result['f1Score']!;
-      final precision = result['precision']!;
-      final recall = result['recall']!;
-      _showEvaluationPopup(score, precision, recall);
-    });
+  Future<void> _evaluateSpeech() async {
+    final recognized = recognizedText.trim();
+    if (recognized.isEmpty) {
+      _showErrorDialog('인식된 텍스트가 없습니다. 다시 시도해 주세요.');
+      return;
+    }
+
+    final sentences = await futureSentences;
+    final current = sentences[currentIndex];
+
+    try {
+      final result = await _api.evaluatePronunciation(
+        sentenceId: current.id,
+        referenceText: current.koreanSentence,
+        recognizedText: recognized,
+      );
+      await _api.updateSentenceAccuracyAndText(
+        current.id,
+        result.accuracyRatio,
+        result.transcript,
+      );
+      if (!mounted) return;
+      _showEvaluationPopup(result);
+    } catch (e) {
+      _showErrorDialog('평가 요청 실패: $e');
+    }
   }
 
-  void _showEvaluationPopup(double score, double precision, double recall) {
+  Future<void> _pickAudioAndEvaluate() async {
+    if (isEvaluatingAudio) return;
+
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['webm', 'wav', 'mp3', 'm4a', 'ogg'],
+      withData: true,
+    );
+
+    if (picked == null || picked.files.isEmpty) return;
+    final file = picked.files.first;
+    final bytes = file.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      _showErrorDialog('파일 데이터를 읽지 못했습니다.');
+      return;
+    }
+
+    final sentences = await futureSentences;
+    final current = sentences[currentIndex];
+
+    setState(() {
+      isEvaluatingAudio = true;
+      listeningStatusText = '음성 파일 평가 중...';
+    });
+
+    try {
+      final result = await _api.evaluatePronunciation(
+        sentenceId: current.id,
+        referenceText: current.koreanSentence,
+        audioBytes: bytes,
+        fileName: file.name,
+        contentType: _mimeTypeFromName(file.name),
+      );
+
+      await _api.updateSentenceAccuracyAndText(
+        current.id,
+        result.accuracyRatio,
+        result.transcript,
+      );
+
+      if (!mounted) return;
+      recognizedText = result.transcript;
+      _showEvaluationPopup(result);
+    } catch (e) {
+      _showErrorDialog('오디오 평가 실패: $e');
+    } finally {
+      if (mounted) {
+        setState(() => isEvaluatingAudio = false);
+      }
+    }
+  }
+
+  Future<void> _evaluateManualText() async {
+    if (isEvaluatingManualText) return;
+    final text = _manualController.text.trim();
+    if (text.isEmpty) {
+      _showErrorDialog('평가할 텍스트를 먼저 입력해 주세요.');
+      return;
+    }
+    setState(() {
+      recognizedText = text;
+      isEvaluatingManualText = true;
+      listeningStatusText = '텍스트 기반 평가 중...';
+    });
+    try {
+      await _evaluateSpeech();
+    } finally {
+      if (mounted) {
+        setState(() => isEvaluatingManualText = false);
+      }
+    }
+  }
+
+  String _mimeTypeFromName(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.wav')) return 'audio/wav';
+    if (lower.endsWith('.mp3')) return 'audio/mpeg';
+    if (lower.endsWith('.m4a')) return 'audio/mp4';
+    if (lower.endsWith('.ogg')) return 'audio/ogg';
+    return 'audio/webm';
+  }
+
+  void _showEvaluationPopup(PronunciationEvaluationResult result) {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (context) {
         return AlertDialog(
-          title: Text('평가 결과'),
+          title: const Text('평가 결과'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('억양 정확도: ${(score * 100).toStringAsFixed(2)}%'),
-              SizedBox(height: 10),
-              Text('Precision: ${(precision * 100).toStringAsFixed(2)}%'),
-              SizedBox(height: 10),
-              Text('Recall: ${(recall * 100).toStringAsFixed(2)}%'),
-              SizedBox(height: 10),
-              Text('인식된 내용: $recognizedText'),
+              Text('점수: ${result.scorePercent.toStringAsFixed(2)}%'),
+              const SizedBox(height: 8),
+              Text('전사: ${result.transcript}'),
+              const SizedBox(height: 8),
+              Text('피드백: ${result.feedback}'),
+              const SizedBox(height: 8),
+              Text(
+                  '문자 유사도: ${(result.charSimilarity * 100).toStringAsFixed(1)}%'),
+              Text(
+                  '핵심 단어 일치율: ${(result.tokenSimilarity * 100).toStringAsFixed(1)}%'),
+              const SizedBox(height: 8),
+              const Text(
+                '평가 기준: 문자 유사도 75% + 핵심 단어 일치율 25%',
+                style: TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 6),
+              Text('모델: ${result.model}', style: const TextStyle(fontSize: 12)),
             ],
           ),
-          actions: <Widget>[
+          actions: [
             TextButton(
-              child: Text('닫기'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('닫기'),
             ),
           ],
         );
@@ -305,265 +427,399 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     );
   }
 
+  void _showErrorDialog(String message) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('오류'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _speech.stop();
+    _manualController.dispose();
+    audioPlayer.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFDFF3FA),
+      backgroundColor: const Color(0xFFDFF3FA),
       appBar: AppBar(
-        title: Text('Accent Learning'),
+        title: const Text('Accent Learning'),
       ),
       body: FutureBuilder<List<AppSentence>>(
         future: futureSentences,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            print('Error fetching sentences: ${snapshot.error}');
-            return Center(child: Text('Failed to load sentences'));
+            return const Center(child: Text('Failed to load sentences'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('No sentences available'));
-          } else {
-            List<AppSentence> sentences = snapshot.data!;
-            AppSentence currentSentence = sentences[currentIndex];
-            return FutureBuilder<Chapter>(
-              future: futureChapter,
-              builder: (context, chapterSnapshot) {
-                if (chapterSnapshot.connectionState ==
-                    ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
-                } else if (chapterSnapshot.hasError) {
-                  print('Error fetching chapter: ${chapterSnapshot.error}');
-                  return Center(child: Text('Failed to load chapter'));
-                } else if (!chapterSnapshot.hasData) {
-                  return Center(child: Text('No chapter available'));
-                } else {
-                  Chapter chapter = chapterSnapshot.data!;
-                  return Stack(
+            return const Center(child: Text('No sentences available'));
+          }
+
+          final sentences = snapshot.data!;
+          final currentSentence = sentences[currentIndex];
+
+          return FutureBuilder<Chapter>(
+            future: futureChapter,
+            builder: (context, chapterSnapshot) {
+              if (chapterSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              } else if (chapterSnapshot.hasError || !chapterSnapshot.hasData) {
+                return const Center(child: Text('No chapter available'));
+              }
+
+              final chapter = chapterSnapshot.data!;
+
+              return Stack(
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('#${chapter.id} #${chapter.title}',
-                                    style: TextStyle(fontSize: 14)),
-                                SizedBox(height: 10),
-                                Image.asset(
-                                  'assets/images/${currentSentence.koreanSentence}.png',
-                                  width: double.infinity,
-                                  height: (MediaQuery.of(context).size.height *
-                                          0.26)
-                                      .clamp(140.0, 220.0)
-                                      .toDouble(),
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Text('Error loading image',
-                                        style: TextStyle(color: Colors.red));
-                                  },
-                                ),
-                                SizedBox(height: 10),
-                                Container(
-                                  color: Colors.grey[200],
-                                  child: Center(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Text(currentSentence.koreanSentence,
-                                            style: TextStyle(fontSize: 24)),
-                                        Text(
-                                            ': ${currentSentence.northKoreanSentence}',
-                                            style: TextStyle(fontSize: 18)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(height: 10),
-                                Text('Greetings',
-                                    style: TextStyle(fontSize: 16)),
-                                SizedBox(height: 5),
-                                Text('${sentences.length} sentences',
-                                    style: TextStyle(fontSize: 14)),
-                                const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      isListening
-                                          ? Icons.mic_rounded
-                                          : Icons.mic_none_rounded,
-                                      color: isListening
-                                          ? Colors.redAccent
-                                          : Colors.black54,
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        listeningStatusText,
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(child: Container()),
-                          Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              children: [
-                                ElevatedButton(
-                                  onPressed: () {
-                                    if (currentSentence.isCorrect) {
-                                      setState(() {
-                                        currentSentence.isCorrect = false;
-                                      });
-                                    } else {
-                                      _saveSentence(currentSentence.id);
-                                    }
-                                  },
-                                  child: Text(
-                                      currentSentence.isCorrect
-                                          ? '저장됨'
-                                          : '저장하기',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: currentSentence.isCorrect
-                                        ? Colors.black
-                                        : Colors.white,
-                                    foregroundColor: currentSentence.isCorrect
-                                        ? Colors.white
-                                        : Colors.black,
-                                    minimumSize: Size(double.infinity, 50),
-                                    side: currentSentence.isCorrect
-                                        ? null
-                                        : BorderSide(color: Colors.black),
-                                  ),
-                                ),
-                                SizedBox(height: 10),
-                                if (currentIndex > 0)
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        currentIndex--;
-                                      });
-                                    },
-                                    child: Text('이전',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.bold)),
-                                    style: ElevatedButton.styleFrom(
-                                      foregroundColor: Colors.black,
-                                      backgroundColor: Colors.white,
-                                      minimumSize: Size(double.infinity, 50),
-                                      side: BorderSide(color: Colors.black),
-                                    ),
-                                  ),
-                                SizedBox(height: 10),
-                                if (currentIndex < sentences.length - 1)
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      _nextSentence(sentences);
-                                    },
-                                    child: Text('다음',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.bold)),
-                                    style: ElevatedButton.styleFrom(
-                                      foregroundColor: Colors.black,
-                                      backgroundColor: Colors.white,
-                                      minimumSize: Size(double.infinity, 50),
-                                      side: BorderSide(color: Colors.black),
-                                    ),
-                                  ),
-                                if (currentIndex == sentences.length - 1)
-                                  ElevatedButton(
-                                    onPressed: _completeLearning,
-                                    child: Text('완료하기',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white)),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.black,
-                                      minimumSize: Size(double.infinity, 50),
-                                    ),
-                                  ),
-                                SizedBox(height: 10),
-                                ElevatedButton(
-                                  onPressed: () => _playTextToSpeech(
-                                      currentSentence.koreanSentence),
-                                  child: Text('음성 듣기',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white)),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.black,
-                                    minimumSize: Size(double.infinity, 50),
-                                  ),
-                                ),
-                                SizedBox(height: 10),
-                                ElevatedButton(
-                                  onPressed: () => isListening
-                                      ? _stopListening()
-                                      : _startListening(),
-                                  child: Text(
-                                      isListening ? '듣기 중지하기' : '직접 말하기',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white)),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.black,
-                                    minimumSize: Size(double.infinity, 50),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (isListening)
-                        Column(
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Spacer(),
-                            Container(
-                              height:
-                                  (MediaQuery.of(context).size.height * 0.28)
-                                      .clamp(170.0, 260.0)
-                                      .toDouble(),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.withOpacity(1.0),
-                                borderRadius: BorderRadius.only(
-                                  topLeft: Radius.circular(20),
-                                  topRight: Radius.circular(20),
+                            Text(
+                              '#${chapter.id} #${chapter.title}',
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            if (kIsWeb && !speechRecognitionSupported) ...[
+                              const SizedBox(height: 8),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF6E8),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFFE6C27A),
+                                  ),
+                                ),
+                                child: Text(
+                                  isLikelySafari
+                                      ? 'Safari에서는 웹 음성인식이 제한됩니다. 아래 텍스트 평가/음성 파일 업로드를 사용해 주세요.'
+                                      : '현재 브라우저에서는 웹 음성인식이 제한됩니다. 아래 텍스트 평가/음성 파일 업로드를 사용해 주세요.',
+                                  style: const TextStyle(fontSize: 12),
                                 ),
                               ),
+                            ],
+                            const SizedBox(height: 10),
+                            Image.asset(
+                              'assets/images/${currentSentence.koreanSentence}.png',
+                              width: double.infinity,
+                              height:
+                                  (MediaQuery.of(context).size.height * 0.26)
+                                      .clamp(140.0, 220.0)
+                                      .toDouble(),
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const Text(
+                                  'Error loading image',
+                                  style: TextStyle(color: Colors.red),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 10),
+                            Container(
+                              color: Colors.grey[200],
                               child: Center(
-                                child: AnimatedTextKit(
-                                  animatedTexts: [
-                                    WavyAnimatedText(
-                                      '말하는 중...',
-                                      textStyle: TextStyle(
-                                        fontSize: 24,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      currentSentence.koreanSentence,
+                                      style: const TextStyle(fontSize: 24),
+                                    ),
+                                    Text(
+                                      ': ${currentSentence.northKoreanSentence}',
+                                      style: const TextStyle(fontSize: 18),
                                     ),
                                   ],
-                                  isRepeatingAnimation: true,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            const Text('Greetings',
+                                style: TextStyle(fontSize: 16)),
+                            const SizedBox(height: 5),
+                            Text(
+                              '${sentences.length} sentences',
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Icon(
+                                  isListening
+                                      ? Icons.mic_rounded
+                                      : Icons.mic_none_rounded,
+                                  color: isListening
+                                      ? Colors.redAccent
+                                      : Colors.black54,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    listeningStatusText,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: const Color(0xFFD9DEEA),
+                                ),
+                              ),
+                              child: const Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '평가 방식',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  SizedBox(height: 6),
+                                  Text(
+                                    '최종 점수 = 문자 유사도 75% + 핵심 단어 일치율 25%',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    '90점↑ 매우 정확 / 75점↑ 좋음 / 55점↑ 보통 / 그 미만 개선 필요',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Expanded(child: SizedBox()),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            ElevatedButton(
+                              onPressed: () {
+                                if (currentSentence.isCorrect) {
+                                  setState(
+                                      () => currentSentence.isCorrect = false);
+                                } else {
+                                  _saveSentence(currentSentence.id);
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: currentSentence.isCorrect
+                                    ? Colors.black
+                                    : Colors.white,
+                                foregroundColor: currentSentence.isCorrect
+                                    ? Colors.white
+                                    : Colors.black,
+                                minimumSize: const Size(double.infinity, 50),
+                                side: currentSentence.isCorrect
+                                    ? null
+                                    : const BorderSide(color: Colors.black),
+                              ),
+                              child: Text(
+                                currentSentence.isCorrect ? '저장됨' : '저장하기',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            if (currentIndex > 0)
+                              ElevatedButton(
+                                onPressed: () => setState(() => currentIndex--),
+                                style: ElevatedButton.styleFrom(
+                                  foregroundColor: Colors.black,
+                                  backgroundColor: Colors.white,
+                                  minimumSize: const Size(double.infinity, 50),
+                                  side: const BorderSide(color: Colors.black),
+                                ),
+                                child: const Text(
+                                  '이전',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            const SizedBox(height: 10),
+                            if (currentIndex < sentences.length - 1)
+                              ElevatedButton(
+                                onPressed: () => _nextSentence(sentences),
+                                style: ElevatedButton.styleFrom(
+                                  foregroundColor: Colors.black,
+                                  backgroundColor: Colors.white,
+                                  minimumSize: const Size(double.infinity, 50),
+                                  side: const BorderSide(color: Colors.black),
+                                ),
+                                child: const Text(
+                                  '다음',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            if (currentIndex == sentences.length - 1)
+                              ElevatedButton(
+                                onPressed: _completeLearning,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.black,
+                                  minimumSize: const Size(double.infinity, 50),
+                                ),
+                                child: const Text(
+                                  '완료하기',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(height: 10),
+                            ElevatedButton(
+                              onPressed: () => _playTextToSpeech(
+                                currentSentence.koreanSentence,
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.black,
+                                minimumSize: const Size(double.infinity, 50),
+                              ),
+                              child: const Text(
+                                '음성 듣기',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            ElevatedButton(
+                              onPressed: (kIsWeb && !speechRecognitionSupported)
+                                  ? null
+                                  : () => isListening
+                                      ? _stopListening()
+                                      : _startListening(),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.black,
+                                minimumSize: const Size(double.infinity, 50),
+                              ),
+                              child: Text(
+                                isListening ? '듣기 중지하기' : '직접 말하기',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: _manualController,
+                              minLines: 1,
+                              maxLines: 3,
+                              decoration: const InputDecoration(
+                                hintText: '직접 말한 문장을 텍스트로 입력해 평가할 수 있습니다.',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            ElevatedButton(
+                              onPressed: isEvaluatingManualText
+                                  ? null
+                                  : _evaluateManualText,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.indigo,
+                                minimumSize: const Size(double.infinity, 50),
+                              ),
+                              child: Text(
+                                isEvaluatingManualText
+                                    ? '텍스트 평가 중...'
+                                    : '텍스트로 평가하기',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            ElevatedButton(
+                              onPressed: isEvaluatingAudio
+                                  ? null
+                                  : _pickAudioAndEvaluate,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blueGrey,
+                                minimumSize: const Size(double.infinity, 50),
+                              ),
+                              child: Text(
+                                isEvaluatingAudio
+                                    ? '오디오 평가 중...'
+                                    : '음성 파일 업로드 평가',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
                                 ),
                               ),
                             ),
                           ],
                         ),
+                      ),
                     ],
-                  );
-                }
-              },
-            );
-          }
+                  ),
+                  if (isListening)
+                    Column(
+                      children: [
+                        const Spacer(),
+                        Container(
+                          height: (MediaQuery.of(context).size.height * 0.28)
+                              .clamp(170.0, 260.0)
+                              .toDouble(),
+                          decoration: const BoxDecoration(
+                            color: Colors.blue,
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(20),
+                              topRight: Radius.circular(20),
+                            ),
+                          ),
+                          child: Center(
+                            child: AnimatedTextKit(
+                              animatedTexts: [
+                                WavyAnimatedText(
+                                  '말하는 중...',
+                                  textStyle: const TextStyle(
+                                    fontSize: 24,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                              isRepeatingAnimation: true,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              );
+            },
+          );
         },
       ),
     );

@@ -151,6 +151,8 @@ class PronunciationEvaluationResult {
   final double tokenSimilarity;
   final String feedback;
   final String model;
+  final String scoreLevel;
+  final Map<String, dynamic> scoreRule;
 
   PronunciationEvaluationResult({
     required this.transcript,
@@ -160,6 +162,8 @@ class PronunciationEvaluationResult {
     required this.tokenSimilarity,
     required this.feedback,
     required this.model,
+    required this.scoreLevel,
+    required this.scoreRule,
   });
 
   factory PronunciationEvaluationResult.fromJson(Map<String, dynamic> json) {
@@ -171,6 +175,10 @@ class PronunciationEvaluationResult {
       tokenSimilarity: (json['token_similarity'] ?? 0).toDouble(),
       feedback: (json['feedback'] ?? '').toString(),
       model: (json['model'] ?? '').toString(),
+      scoreLevel: (json['score_level'] ?? '').toString(),
+      scoreRule: (json['score_rule'] is Map<String, dynamic>)
+          ? (json['score_rule'] as Map<String, dynamic>)
+          : const <String, dynamic>{},
     );
   }
 }

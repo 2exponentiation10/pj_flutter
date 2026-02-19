@@ -7,6 +7,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/browser_capability.dart';
 import 'accent_evaluation_result_page.dart';
 
 class AccentEvaluationPage extends StatefulWidget {
@@ -28,8 +29,11 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   int currentIndex = 0;
   bool isListening = false;
   bool isEvaluatingAudio = false;
+  bool isEvaluatingManualText = false;
+  bool speechRecognitionSupported = true;
   String recognizedText = '';
   String listeningStatusText = '직접 말하기를 눌러 음성 입력을 시작하세요.';
+  final TextEditingController _manualController = TextEditingController();
 
   List<AppSentence> sentences = [];
 
@@ -39,6 +43,14 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
     futureSentences = _api.fetchSentences(widget.chapterId);
     futureChapter = _api.fetchChapter(widget.chapterId);
     _speech = stt.SpeechToText();
+    if (kIsWeb) {
+      speechRecognitionSupported = hasWebSpeechRecognition;
+      if (!speechRecognitionSupported) {
+        listeningStatusText = isLikelySafari
+            ? 'Safari에서는 웹 음성 입력이 제한될 수 있습니다. 텍스트 입력/오디오 업로드를 사용해 주세요.'
+            : '현재 브라우저에서 웹 음성 입력을 사용할 수 없습니다.';
+      }
+    }
   }
 
   Future<void> _checkPermissions() async {
@@ -74,6 +86,11 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   }
 
   Future<void> _startListening() async {
+    if (kIsWeb && !speechRecognitionSupported) {
+      _showErrorDialog('이 브라우저에서는 음성 입력이 제한됩니다. 텍스트 입력 또는 음성 파일 업로드를 사용해 주세요.');
+      return;
+    }
+
     await _checkPermissions();
 
     final available = await _speech.initialize(
@@ -96,6 +113,10 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
     );
 
     if (!available) {
+      setState(() {
+        speechRecognitionSupported = false;
+        listeningStatusText = '음성 입력 초기화에 실패했습니다. 텍스트 입력/오디오 업로드를 사용해 주세요.';
+      });
       _showErrorDialog('이 기기에서는 음성 인식을 사용할 수 없습니다.');
       return;
     }
@@ -116,8 +137,8 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
       },
       listenFor: const Duration(seconds: 6),
       pauseFor: const Duration(seconds: 3),
-      partialResults: true,
       localeId: 'ko-KR',
+      listenOptions: stt.SpeechListenOptions(partialResults: true),
     );
   }
 
@@ -128,6 +149,27 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
       listeningStatusText = '음성 입력을 중지했습니다.';
     });
     _speech.stop();
+  }
+
+  Future<void> _evaluateManualText() async {
+    if (isEvaluatingManualText) return;
+    final text = _manualController.text.trim();
+    if (text.isEmpty) {
+      _showErrorDialog('평가할 텍스트를 먼저 입력해 주세요.');
+      return;
+    }
+    setState(() {
+      recognizedText = text;
+      isEvaluatingManualText = true;
+      listeningStatusText = '텍스트 기반 평가 중...';
+    });
+    try {
+      await _evaluateRecognizedText();
+    } finally {
+      if (mounted) {
+        setState(() => isEvaluatingManualText = false);
+      }
+    }
   }
 
   Future<void> _evaluateRecognizedText() async {
@@ -220,9 +262,21 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
           children: [
             Text('점수: ${result.scorePercent.toStringAsFixed(2)}%'),
             const SizedBox(height: 6),
+            Text('등급: ${result.scoreLevel.isEmpty ? '-' : result.scoreLevel}'),
+            const SizedBox(height: 6),
+            Text(
+                '문자 유사도: ${(result.charSimilarity * 100).toStringAsFixed(1)}%'),
+            Text(
+                '핵심 단어 일치율: ${(result.tokenSimilarity * 100).toStringAsFixed(1)}%'),
+            const SizedBox(height: 6),
             Text('전사: ${result.transcript}'),
             const SizedBox(height: 6),
             Text('피드백: ${result.feedback}'),
+            const SizedBox(height: 6),
+            const Text(
+              '평가 기준: 문자 유사도 75% + 핵심 단어 일치율 25%',
+              style: TextStyle(fontSize: 12),
+            ),
             const SizedBox(height: 6),
             Text('모델: ${result.model}', style: const TextStyle(fontSize: 12)),
           ],
@@ -244,6 +298,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   }
 
   void _showErrorDialog(String message) {
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -257,6 +312,13 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _speech.stop();
+    _manualController.dispose();
+    super.dispose();
   }
 
   @override
@@ -311,6 +373,26 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
                           children: [
                             Text('#${chapter.id} #${chapter.title}',
                                 style: const TextStyle(fontSize: 14)),
+                            if (kIsWeb && !speechRecognitionSupported) ...[
+                              const SizedBox(height: 10),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF6E8),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFFE6C27A),
+                                  ),
+                                ),
+                                child: Text(
+                                  isLikelySafari
+                                      ? 'Safari에서는 웹 음성인식이 제한됩니다. 아래 텍스트 평가 또는 음성 파일 업로드를 사용하세요.'
+                                      : '현재 브라우저에서는 웹 음성인식이 제한됩니다. 텍스트 평가/음성 파일 업로드를 사용하세요.',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 10),
                             Container(
                               color: Colors.grey[200],
@@ -349,6 +431,38 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: const Color(0xFFD9DEEA),
+                                ),
+                              ),
+                              child: const Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '평가 방식',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  SizedBox(height: 6),
+                                  Text(
+                                    '최종 점수 = 문자 유사도 75% + 핵심 단어 일치율 25%',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    '90점↑ 매우 정확 / 75점↑ 좋음 / 55점↑ 보통 / 그 미만 개선 필요',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -358,15 +472,45 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
                         child: Column(
                           children: [
                             ElevatedButton(
-                              onPressed: () => isListening
-                                  ? _stopListening()
-                                  : _startListening(),
+                              onPressed: (kIsWeb && !speechRecognitionSupported)
+                                  ? null
+                                  : () => isListening
+                                      ? _stopListening()
+                                      : _startListening(),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.black,
                                 minimumSize: const Size(double.infinity, 50),
                               ),
                               child: Text(
                                 isListening ? '듣기 중지하기' : '직접 말하기',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: _manualController,
+                              minLines: 1,
+                              maxLines: 3,
+                              decoration: const InputDecoration(
+                                hintText: '직접 말한 문장을 텍스트로 입력해 평가할 수 있습니다.',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            ElevatedButton(
+                              onPressed: isEvaluatingManualText
+                                  ? null
+                                  : _evaluateManualText,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.indigo,
+                                minimumSize: const Size(double.infinity, 50),
+                              ),
+                              child: Text(
+                                isEvaluatingManualText
+                                    ? '텍스트 평가 중...'
+                                    : '텍스트로 평가하기',
                                 style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white),
