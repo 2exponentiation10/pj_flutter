@@ -38,10 +38,50 @@ jobs:
           fi
           echo "$FLUTTER_HOME/bin" >> "$GITHUB_PATH"
 
-      - name: Install unzip
+      - name: Ensure unzip command
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y unzip
+          if command -v unzip >/dev/null 2>&1; then
+            exit 0
+          fi
+          mkdir -p "$HOME/.local/bin"
+          cat > "$HOME/.local/bin/unzip" <<'EOF'
+          #!/usr/bin/env python3
+          import os
+          import sys
+          import zipfile
+
+          args = sys.argv[1:]
+          if not args:
+            print("usage: unzip <zipfile> [-d dir]", file=sys.stderr)
+            sys.exit(2)
+
+          zip_path = None
+          out_dir = "."
+          i = 0
+          while i < len(args):
+            arg = args[i]
+            if arg == "-d" and i + 1 < len(args):
+              out_dir = args[i + 1]
+              i += 2
+              continue
+            if arg.startswith("-"):
+              i += 1
+              continue
+            if zip_path is None:
+              zip_path = arg
+            i += 1
+
+          if zip_path is None:
+            print("unzip shim: zip file argument is missing", file=sys.stderr)
+            sys.exit(2)
+
+          os.makedirs(out_dir, exist_ok=True)
+          with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(out_dir)
+          EOF
+          chmod +x "$HOME/.local/bin/unzip"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Verify Flutter
         run: flutter --version
