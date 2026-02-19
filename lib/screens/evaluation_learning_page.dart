@@ -1,9 +1,7 @@
 // 필요한 패키지들을 임포트합니다.
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:animated_text_kit/animated_text_kit.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -26,22 +24,7 @@ class EvaluationLearningPage extends StatefulWidget {
 
 // _EvaluationLearningPageState 클래스는 EvaluationLearningPage의 상태를 관리합니다.
 class _EvaluationLearningPageState extends State<EvaluationLearningPage> {
-  static const String _localBaseUrl = 'http://127.0.0.1:8000/api';
-  static const String _androidEmulatorBaseUrl = 'http://10.0.2.2:8000/api';
-  static const String _productionBaseUrl = 'https://your-production-server.com/api';
-
-  // 기본 URL을 동적으로 설정합니다.
-  static String get baseUrl {
-    if (kIsWeb) {
-      return _productionBaseUrl;
-    } else if (Platform.isAndroid) {
-      return _androidEmulatorBaseUrl;
-    } else if (Platform.isIOS) {
-      return _localBaseUrl;
-    } else {
-      return _localBaseUrl;
-    }
-  }
+  String get baseUrl => ApiService.baseUrl;
 
 
 

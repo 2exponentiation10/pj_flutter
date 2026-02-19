@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:googleapis_auth/auth_io.dart';
@@ -51,6 +52,13 @@ class _WordLearningPageState extends State<WordLearningPage> {
   }
 
   Future<void> _playTextToSpeech(String text) async {
+    if (kIsWeb) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('웹 버전에서는 현재 TTS 기능이 비활성화되어 있습니다.')),
+      );
+      return;
+    }
     try {
       final authClient = await _getAuthClient();
       final ttsApi = tts.TexttospeechApi(authClient);
@@ -102,7 +110,7 @@ class _WordLearningPageState extends State<WordLearningPage> {
   }
 
   Future<void> _saveWord(int wordId) async {
-    final response = await http.post(Uri.parse('http://127.0.0.1:8000/api/words/$wordId/save/'));
+    final response = await http.post(Uri.parse('${ApiService.baseUrl}/words/$wordId/save/'));
 
     if (response.statusCode == 200) {
       setState(() {
