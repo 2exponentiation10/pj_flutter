@@ -153,6 +153,14 @@ class PronunciationEvaluationResult {
   final String model;
   final String scoreLevel;
   final Map<String, dynamic> scoreRule;
+  final double textScore;
+  final bool audioMetricsAvailable;
+  final double? speedScore;
+  final double? pitchScore;
+  final double? audioDurationSec;
+  final double? syllablesPerSec;
+  final double? pitchMedianHz;
+  final double? pitchStdHz;
 
   PronunciationEvaluationResult({
     required this.transcript,
@@ -164,6 +172,14 @@ class PronunciationEvaluationResult {
     required this.model,
     required this.scoreLevel,
     required this.scoreRule,
+    required this.textScore,
+    required this.audioMetricsAvailable,
+    this.speedScore,
+    this.pitchScore,
+    this.audioDurationSec,
+    this.syllablesPerSec,
+    this.pitchMedianHz,
+    this.pitchStdHz,
   });
 
   factory PronunciationEvaluationResult.fromJson(Map<String, dynamic> json) {
@@ -179,6 +195,26 @@ class PronunciationEvaluationResult {
       scoreRule: (json['score_rule'] is Map<String, dynamic>)
           ? (json['score_rule'] as Map<String, dynamic>)
           : const <String, dynamic>{},
+      textScore: (json['text_score'] ?? 0).toDouble(),
+      audioMetricsAvailable: (json['audio_metrics_available'] ?? false) == true,
+      speedScore: json['speed_score'] == null
+          ? null
+          : (json['speed_score'] as num).toDouble(),
+      pitchScore: json['pitch_score'] == null
+          ? null
+          : (json['pitch_score'] as num).toDouble(),
+      audioDurationSec: json['audio_duration_sec'] == null
+          ? null
+          : (json['audio_duration_sec'] as num).toDouble(),
+      syllablesPerSec: json['syllables_per_sec'] == null
+          ? null
+          : (json['syllables_per_sec'] as num).toDouble(),
+      pitchMedianHz: json['pitch_median_hz'] == null
+          ? null
+          : (json['pitch_median_hz'] as num).toDouble(),
+      pitchStdHz: json['pitch_std_hz'] == null
+          ? null
+          : (json['pitch_std_hz'] as num).toDouble(),
     );
   }
 }

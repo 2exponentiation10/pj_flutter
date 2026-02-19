@@ -269,13 +269,27 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
             Text(
                 '핵심 단어 일치율: ${(result.tokenSimilarity * 100).toStringAsFixed(1)}%'),
             const SizedBox(height: 6),
+            Text('텍스트 점수: ${(result.textScore * 100).toStringAsFixed(1)}%'),
+            if (result.audioMetricsAvailable) ...[
+              const SizedBox(height: 6),
+              Text(
+                  '속도 점수: ${((result.speedScore ?? 0) * 100).toStringAsFixed(1)}%'),
+              Text(
+                  '피치 점수: ${((result.pitchScore ?? 0) * 100).toStringAsFixed(1)}%'),
+              Text(
+                  '음성 길이: ${(result.audioDurationSec ?? 0).toStringAsFixed(2)}초 / 말속도: ${(result.syllablesPerSec ?? 0).toStringAsFixed(2)}음절/초'),
+              Text(
+                  '피치 중앙값: ${(result.pitchMedianHz ?? 0).toStringAsFixed(1)}Hz / 변동성: ${(result.pitchStdHz ?? 0).toStringAsFixed(1)}Hz'),
+            ],
             Text('전사: ${result.transcript}'),
             const SizedBox(height: 6),
             Text('피드백: ${result.feedback}'),
             const SizedBox(height: 6),
-            const Text(
-              '평가 기준: 문자 유사도 75% + 핵심 단어 일치율 25%',
-              style: TextStyle(fontSize: 12),
+            Text(
+              result.audioMetricsAvailable
+                  ? '평가 기준: 텍스트 60% + 속도 20% + 피치 20%'
+                  : '평가 기준: 문자 유사도 75% + 핵심 단어 일치율 25%',
+              style: const TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 6),
             Text('모델: ${result.model}', style: const TextStyle(fontSize: 12)),
@@ -452,12 +466,12 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
                                   ),
                                   SizedBox(height: 6),
                                   Text(
-                                    '최종 점수 = 문자 유사도 75% + 핵심 단어 일치율 25%',
+                                    '오디오 업로드 시: 텍스트 60% + 속도 20% + 피치 20%',
                                     style: TextStyle(fontSize: 12),
                                   ),
                                   SizedBox(height: 4),
                                   Text(
-                                    '90점↑ 매우 정확 / 75점↑ 좋음 / 55점↑ 보통 / 그 미만 개선 필요',
+                                    '텍스트만 평가 시: 문자 유사도 75% + 핵심 단어 일치율 25%',
                                     style: TextStyle(fontSize: 12),
                                   ),
                                 ],
