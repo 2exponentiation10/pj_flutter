@@ -11,6 +11,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:animated_text_kit/animated_text_kit.dart';
 import '../services/api_service.dart';
+import '../services/web_tts.dart';
 import '../models/models.dart';
 import 'evaluation_learning_result_page.dart';
 
@@ -56,9 +57,11 @@ class _WordLearningPageState extends State<WordLearningPage> {
 
   Future<void> _playTextToSpeech(String text) async {
     if (kIsWeb) {
+      final ok = await speakOnWeb(text, rate: 0.9);
+      if (ok) return;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('웹 버전에서는 현재 TTS 기능이 비활성화되어 있습니다.')),
+        SnackBar(content: Text('웹 브라우저 TTS를 사용할 수 없습니다.')),
       );
       return;
     }

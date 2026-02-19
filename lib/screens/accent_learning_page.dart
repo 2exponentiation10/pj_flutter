@@ -12,6 +12,7 @@ import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:permission_handler/permission_handler.dart';
 import '../services/api_service.dart';
+import '../services/web_tts.dart';
 import '../models/models.dart';
 import 'rouge_l.dart';
 import 'accent_learning_result_page.dart'; // 새로운 페이지 파일을 임포트합니다.
@@ -69,9 +70,11 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
 
   Future<void> _playTextToSpeech(String text) async {
     if (kIsWeb) {
+      final ok = await speakOnWeb(text, rate: 0.9);
+      if (ok) return;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('웹 버전에서는 현재 TTS 기능이 비활성화되어 있습니다.')),
+        SnackBar(content: Text('웹 브라우저 TTS를 사용할 수 없습니다.')),
       );
       return;
     }
