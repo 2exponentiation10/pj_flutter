@@ -1,145 +1,139 @@
-// 필요한 패키지들을 임포트합니다.
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../services/api_service.dart';
+import '../widgets/custom_widgets.dart';
 
-// 애플리케이션의 진입점입니다.
-void main() {
-  runApp(MyApp());
-}
-
-// MyApp 클래스는 애플리케이션의 루트 위젯입니다.
-class MyApp extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Chatbot', // 애플리케이션의 제목입니다.
-      theme: ThemeData(
-        primarySwatch: Colors.blue, // 기본 테마 색상을 파란색으로 설정합니다.
-      ),
-      home: ChatPage(), // 기본 화면으로 ChatPage를 설정합니다.
-    );
-  }
-}
-
-// ChatPage 클래스는 챗봇과의 대화 화면을 나타냅니다.
 class ChatPage extends StatefulWidget {
   @override
   _ChatPageState createState() => _ChatPageState();
 }
 
-// _ChatPageState 클래스는 ChatPage의 상태를 관리합니다.
 class _ChatPageState extends State<ChatPage> {
-  final TextEditingController _controller = TextEditingController(); // 텍스트 입력 컨트롤러입니다.
-  final List<Map<String, String>> _messages = []; // 메시지 목록을 저장합니다.
-  final String apiKey = dotenv.env['OPENAI_API_KEY']!; // OpenAI API 키입니다.
+  final TextEditingController _controller = TextEditingController();
+  final List<Map<String, String>> _messages = [];
+  final ApiService _apiService = ApiService();
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    // 초기 메시지를 추가합니다.
-    _messages.add({'role': 'bot', 'content': '한국말과 북한말에 대해 궁금한걸 뭐든 물어보세요'});
+    _messages.add({'role': 'bot', 'content': '남북한 언어 차이, 표현, 발음에 대해 질문해보세요.'});
   }
 
-  // 사용자의 메시지를 전송하는 비동기 함수입니다.
   Future<void> _sendMessage(String message) async {
     setState(() {
-      _messages.add({'role': 'user', 'content': message}); // 사용자의 메시지를 추가합니다.
+      _isLoading = true;
+      _messages.add({'role': 'user', 'content': message});
     });
 
-    // OpenAI API에 POST 요청을 보냅니다.
-    final response = await http.post(
-      Uri.parse('https://api.openai.com/v1/chat/completions'),
-      headers: {
-        'Content-Type': 'application/json; charset=UTF-8',
-        'Authorization': 'Bearer $apiKey',
-      },
-      body: utf8.encode(jsonEncode({
-        'model': 'gpt-3.5-turbo',
-        'messages': [
-          {'role': 'system', 'content': 'You are an expert in North and South Korean languages.'},
-          {'role': 'user', 'content': message},
-        ],
-      })),
-    );
-
-    if (response.statusCode == 200) {
-      // 응답이 성공적일 경우, 응답 메시지를 추가합니다.
-      final responseBody = jsonDecode(utf8.decode(response.bodyBytes));
+    try {
+      final reply = await _apiService.sendChatMessage(message);
       setState(() {
-        _messages.add({'role': 'bot', 'content': responseBody['choices'][0]['message']['content']});
+        _messages.add({'role': 'bot', 'content': reply});
       });
-    } else {
-      // 응답이 실패할 경우, 에러 메시지를 추가합니다.
-      final responseBody = jsonDecode(utf8.decode(response.bodyBytes));
+    } catch (e) {
       setState(() {
         _messages.add({
           'role': 'bot',
-          'content': 'Error: ${responseBody['error']['message']}\nPlease check your quota at: https://platform.openai.com/account/usage'
+          'content': '채팅 요청 실패: $e',
         });
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(
-        title: Text('AI와 대화하기'), // 앱바의 제목입니다.
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              itemCount: _messages.length, // 메시지의 수입니다.
-              itemBuilder: (context, index) {
-                final message = _messages[index];
-                return ListTile(
-                  title: Align(
-                    alignment: message['role'] == 'user' ? Alignment.centerRight : Alignment.centerLeft,
+      appBar: AppBar(title: const Text('AI와 대화하기')),
+      body: GradientPage(
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+                itemCount: _messages.length,
+                itemBuilder: (context, index) {
+                  final message = _messages[index];
+                  final isUser = message['role'] == 'user';
+                  return Align(
+                    alignment:
+                        isUser ? Alignment.centerRight : Alignment.centerLeft,
                     child: Container(
+                      constraints: const BoxConstraints(maxWidth: 560),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: message['role'] == 'user' ? Colors.blue[100] : Colors.green[100], // 메시지의 배경 색상입니다.
-                        borderRadius: BorderRadius.circular(10),
+                        color: isUser
+                            ? colorScheme.primary
+                            : (isDark ? const Color(0xFF141A24) : Colors.white),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isUser
+                              ? colorScheme.primary
+                              : (isDark
+                                  ? const Color(0xFF2D3D5A)
+                                  : const Color(0xFFDCE3F1)),
+                        ),
                       ),
-                      padding: EdgeInsets.all(10),
-                      child: Text(message['content']!), // 메시지의 내용을 표시합니다.
+                      child: Text(
+                        message['content'] ?? '',
+                        style: TextStyle(
+                          color: isUser
+                              ? Colors.white
+                              : (isDark
+                                  ? const Color(0xFFEAF0FF)
+                                  : const Color(0xFF1E283B)),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            if (_isLoading) const LinearProgressIndicator(minHeight: 2),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      enabled: !_isLoading,
+                      decoration: const InputDecoration(hintText: '질문을 입력하세요'),
+                      onSubmitted: (value) {
+                        final text = value.trim();
+                        if (text.isEmpty || _isLoading) return;
+                        _sendMessage(text);
+                        _controller.clear();
+                      },
                     ),
                   ),
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller, // 텍스트 입력 컨트롤러입니다.
-                    decoration: InputDecoration(
-                      hintText: 'Text message', // 힌트 텍스트입니다.
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            final text = _controller.text.trim();
+                            if (text.isEmpty) return;
+                            _sendMessage(text);
+                            _controller.clear();
+                          },
+                    child: const Icon(Icons.send_rounded),
                   ),
-                ),
-                IconButton(
-                  icon: Icon(Icons.send), // 전송 버튼 아이콘입니다.
-                  onPressed: () {
-                    if (_controller.text.isNotEmpty) {
-                      _sendMessage(_controller.text); // 메시지를 전송합니다.
-                      _controller.clear(); // 입력 필드를 초기화합니다.
-                    }
-                  },
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

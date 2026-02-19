@@ -1,33 +1,36 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/material.dart';
+import 'package:http_parser/http_parser.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import '../models/models.dart';
-
-
-
 
 class ApiService {
   static const String _localBaseUrl = 'http://127.0.0.1:8000/api';
   static const String _androidEmulatorBaseUrl = 'http://10.0.2.2:8000/api';
-  static const String _productionBaseUrl = 'https://your-production-server.com/api';
+  static const String _webDefaultBaseUrl = 'http://127.0.0.1:8000/api';
 
   // 기본 URL을 동적으로 설정합니다.
   static String get baseUrl {
-    if (kIsWeb) {
-      return _productionBaseUrl;
-    } else if (Platform.isAndroid) {
-      return _androidEmulatorBaseUrl;
-    } else if (Platform.isIOS) {
-      return _localBaseUrl;
-    } else {
-      return _localBaseUrl;
+    const configuredBaseUrl =
+        String.fromEnvironment('API_BASE_URL', defaultValue: '');
+    if (configuredBaseUrl.isNotEmpty) {
+      return configuredBaseUrl;
     }
+    if (kIsWeb) {
+      return _webDefaultBaseUrl;
+    }
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return _androidEmulatorBaseUrl;
+    }
+    return _localBaseUrl;
   }
 
-  Future<void> updateSentenceAccuracyAndText(int sentenceId, double accuracy, String recognizedText) async {
-    final url = Uri.parse('$baseUrl/sentences/$sentenceId/update_accuracy_and_text/');
+  Future<void> updateSentenceAccuracyAndText(
+      int sentenceId, double accuracy, String recognizedText) async {
+    final url =
+        Uri.parse('$baseUrl/sentences/$sentenceId/update_accuracy_and_text/');
     final body = jsonEncode(<String, dynamic>{
       'accuracy': accuracy,
       'recognized_text': recognizedText,
@@ -53,7 +56,8 @@ class ApiService {
     print('Update successful');
   }
 
-  Future<void> updateSentenceAccuracy(int sentenceId, double accuracy, String recognizedText) async {
+  Future<void> updateSentenceAccuracy(
+      int sentenceId, double accuracy, String recognizedText) async {
     final response = await http.put(
       Uri.parse('$baseUrl/sentences/$sentenceId/update_accuracy/'),
       headers: <String, String>{
@@ -111,7 +115,8 @@ class ApiService {
   }
 
   Future<List<Word>> fetchWords(int chapterId) async {
-    final response = await http.get(Uri.parse('$baseUrl/chapters/$chapterId/words/'));
+    final response =
+        await http.get(Uri.parse('$baseUrl/chapters/$chapterId/words/'));
 
     if (response.statusCode == 200) {
       List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
@@ -145,14 +150,16 @@ class ApiService {
   }
 
   Future<List<AppSentence>> fetchSentences(int chapterId) async {
-    final response = await http.get(Uri.parse('$baseUrl/chapters/$chapterId/sentences/'));
+    final response =
+        await http.get(Uri.parse('$baseUrl/chapters/$chapterId/sentences/'));
 
     if (response.statusCode == 200) {
       List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
       print('Fetched sentences successfully: ${data.length} sentences');
       return data.map((item) => AppSentence.fromJson(item)).toList();
     } else {
-      print('Failed to load sentences: ${response.statusCode} ${response.body}');
+      print(
+          'Failed to load sentences: ${response.statusCode} ${response.body}');
       throw Exception('Failed to load sentences');
     }
   }
@@ -167,7 +174,8 @@ class ApiService {
     }
   }
 
-  Future<void> updateSentenceIsCollect(int sentenceId, bool isCorrect, bool isCollect) async {
+  Future<void> updateSentenceIsCollect(
+      int sentenceId, bool isCorrect, bool isCollect) async {
     final response = await http.patch(
       Uri.parse('$baseUrl/sentences/$sentenceId/update/'),
       headers: {'Content-Type': 'application/json'},
@@ -193,7 +201,8 @@ class ApiService {
   }
 
   Future<void> updateSentenceIsCalled(int sentenceId) async {
-    final response = await http.post(Uri.parse('$baseUrl/sentences/$sentenceId/mark_called/'));
+    final response = await http
+        .post(Uri.parse('$baseUrl/sentences/$sentenceId/mark_called/'));
 
     if (response.statusCode != 200) {
       throw Exception('Failed to update sentence');
@@ -254,7 +263,8 @@ class ApiService {
   }
 
   Future<void> updateWordIsCalled(int wordId) async {
-    final response = await http.post(Uri.parse('$baseUrl/words/$wordId/mark_called/'));
+    final response =
+        await http.post(Uri.parse('$baseUrl/words/$wordId/mark_called/'));
 
     if (response.statusCode != 200) {
       throw Exception('Failed to update word');
@@ -262,7 +272,8 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> fetchLearningProgress(int chapterId) async {
-    final response = await http.get(Uri.parse('$baseUrl/chapters/$chapterId/learning_progress/'));
+    final response = await http
+        .get(Uri.parse('$baseUrl/chapters/$chapterId/learning_progress/'));
 
     if (response.statusCode == 200) {
       return json.decode(response.body);
@@ -272,17 +283,78 @@ class ApiService {
   }
 
   Future<List<AppSentence>> fetchEvaluationResults(int chapterId) async {
-    final response = await http.get(Uri.parse('$baseUrl/chapters/$chapterId/evaluation_results/'));
+    final response = await http
+        .get(Uri.parse('$baseUrl/chapters/$chapterId/evaluation_results/'));
 
     if (response.statusCode == 200) {
       List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
-      print('Fetched evaluation results: $data');  // 로그 추가
+      print('Fetched evaluation results: $data'); // 로그 추가
       return data.map((item) => AppSentence.fromJson(item)).toList();
     } else {
-      print('Failed to load evaluation results: ${response.statusCode} ${response.body}');  // 로그 추가
+      print(
+          'Failed to load evaluation results: ${response.statusCode} ${response.body}'); // 로그 추가
       throw Exception('Failed to load evaluation results');
     }
   }
 
+  Future<String> sendChatMessage(String message) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/chat/'),
+      headers: {'Content-Type': 'application/json; charset=UTF-8'},
+      body: jsonEncode({'message': message}),
+    );
 
+    if (response.statusCode == 200) {
+      final data =
+          json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      return (data['reply'] ?? '').toString();
+    }
+
+    final body = utf8.decode(response.bodyBytes);
+    throw Exception(
+        'Failed to get chat response: ${response.statusCode} $body');
+  }
+
+  Future<PronunciationEvaluationResult> evaluatePronunciation({
+    required String referenceText,
+    int? sentenceId,
+    String? recognizedText,
+    Uint8List? audioBytes,
+    String fileName = 'speech.webm',
+    String contentType = 'audio/webm',
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/pronunciation/evaluate/'),
+    );
+
+    request.fields['reference_text'] = referenceText;
+    if (sentenceId != null) {
+      request.fields['sentence_id'] = sentenceId.toString();
+    }
+    if (recognizedText != null && recognizedText.trim().isNotEmpty) {
+      request.fields['recognized_text'] = recognizedText.trim();
+    }
+    if (audioBytes != null && audioBytes.isNotEmpty) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'audio',
+          audioBytes,
+          filename: fileName,
+          contentType: MediaType.parse(contentType),
+        ),
+      );
+    }
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+    final payload =
+        json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+    if (response.statusCode == 200) {
+      return PronunciationEvaluationResult.fromJson(payload);
+    }
+    throw Exception(
+        'Failed to evaluate pronunciation: ${response.statusCode} ${response.body}');
+  }
 }

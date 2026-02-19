@@ -1,6 +1,3 @@
-// 필요한 패키지들을 임포트합니다.
-import '../screens/progress_page.dart';
-
 // Chapter(챕터)를 나타내는 클래스입니다.
 class Chapter {
   final int id; // 챕터의 고유 식별자입니다.
@@ -69,7 +66,8 @@ class ProgressData {
   // JSON으로부터 ProgressData 객체를 생성하는 팩토리 메서드입니다.
   factory ProgressData.fromJson(Map<String, dynamic> json) {
     var list = json['progress_data'] as List;
-    List<ChapterProgress> progressDataList = list.map((i) => ChapterProgress.fromJson(i)).toList();
+    List<ChapterProgress> progressDataList =
+        list.map((i) => ChapterProgress.fromJson(i)).toList();
 
     return ProgressData(
       progressData: progressDataList,
@@ -145,3 +143,34 @@ class AppSentence {
   }
 }
 
+class PronunciationEvaluationResult {
+  final String transcript;
+  final double accuracyRatio;
+  final double scorePercent;
+  final double charSimilarity;
+  final double tokenSimilarity;
+  final String feedback;
+  final String model;
+
+  PronunciationEvaluationResult({
+    required this.transcript,
+    required this.accuracyRatio,
+    required this.scorePercent,
+    required this.charSimilarity,
+    required this.tokenSimilarity,
+    required this.feedback,
+    required this.model,
+  });
+
+  factory PronunciationEvaluationResult.fromJson(Map<String, dynamic> json) {
+    return PronunciationEvaluationResult(
+      transcript: (json['transcript'] ?? '').toString(),
+      accuracyRatio: (json['accuracy_ratio'] ?? 0).toDouble(),
+      scorePercent: (json['score_percent'] ?? 0).toDouble(),
+      charSimilarity: (json['char_similarity'] ?? 0).toDouble(),
+      tokenSimilarity: (json['token_similarity'] ?? 0).toDouble(),
+      feedback: (json['feedback'] ?? '').toString(),
+      model: (json['model'] ?? '').toString(),
+    );
+  }
+}
