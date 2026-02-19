@@ -18,7 +18,7 @@ run_docker() {
 
 cd "$PROJECT_ROOT"
 flutter pub get
-flutter build web --release --dart-define=API_BASE_URL="$API_BASE_URL"
+flutter build web --release --pwa-strategy=none --dart-define=API_BASE_URL="$API_BASE_URL"
 
 mkdir -p "$TARGET_WEB_DIR"
 rsync -az --delete "$PROJECT_ROOT/build/web/" "$TARGET_WEB_DIR/"
