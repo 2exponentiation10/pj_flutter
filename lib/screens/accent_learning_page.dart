@@ -447,13 +447,14 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     final current = sentences[currentIndex];
 
     try {
+      final contentType = _detectAudioContentType(audioBytes);
       final result = await _api.evaluatePronunciation(
         sentenceId: current.id,
         referenceText: current.koreanSentence,
         recognizedText: '',
         audioBytes: audioBytes,
-        fileName: 'mic_input',
-        contentType: _detectAudioContentType(audioBytes),
+        fileName: _buildAudioFileName(contentType),
+        contentType: contentType,
       );
       await _api.updateSentenceAccuracyAndText(
         current.id,
@@ -487,7 +488,23 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
         bytes[3] == 0xA3) {
       return 'audio/webm';
     }
+    if (bytes.length >= 12 &&
+        bytes[4] == 0x66 &&
+        bytes[5] == 0x74 &&
+        bytes[6] == 0x79 &&
+        bytes[7] == 0x70) {
+      return 'audio/mp4';
+    }
     return 'audio/webm';
+  }
+
+  String _buildAudioFileName(String contentType) {
+    if (contentType.contains('wav')) return 'mic_input.wav';
+    if (contentType.contains('ogg')) return 'mic_input.ogg';
+    if (contentType.contains('mp4') || contentType.contains('m4a')) {
+      return 'mic_input.m4a';
+    }
+    return 'mic_input.webm';
   }
 
   void _showEvaluationPopup(PronunciationEvaluationResult result) {
