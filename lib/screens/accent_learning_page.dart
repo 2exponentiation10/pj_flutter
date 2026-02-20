@@ -19,7 +19,6 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../models/models.dart';
 import '../services/api_service.dart';
-import '../services/browser_capability.dart';
 import '../services/live_audio_analyzer.dart';
 import '../services/tts_service.dart';
 import '../widgets/voice_curve_compare_chart.dart';
@@ -63,6 +62,9 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   double _liveSpeedEstimate = 0;
   double _livePitchEstimateHz = 0;
   Timer? _webAutoStopTimer;
+  bool _webHasSpeech = false;
+  DateTime? _webSpeechStartedAt;
+  DateTime? _webLastVoiceAt;
 
   int playCount = 0;
 
@@ -76,12 +78,8 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     _liveAudioAnalyzer = createLiveAudioAnalyzer();
 
     if (kIsWeb) {
-      speechRecognitionSupported = hasWebSpeechRecognition;
-      if (!speechRecognitionSupported) {
-        listeningStatusText = isLikelySafari
-            ? 'Safari에서는 웹 음성 입력이 제한될 수 있습니다.'
-            : '현재 브라우저에서 웹 음성 입력을 사용할 수 없습니다.';
-      }
+      speechRecognitionSupported = true;
+      listeningStatusText = '직접 말하기를 눌러 음성 입력을 시작하세요.';
     }
   }
 
@@ -252,7 +250,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       setState(() {
         isListening = true;
         recognizedText = '';
-        listeningStatusText = '웹 녹음 중... 또박또박 말해 주세요.';
+        listeningStatusText = '발화를 시작해 주세요. 무음이 감지되면 자동 종료됩니다.';
         _liveInputCurve.clear();
         _soundLevelMin = 0;
         _soundLevelMax = 0;
@@ -261,10 +259,13 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
         _activeFrames = 0;
         _liveSpeedEstimate = 0;
         _livePitchEstimateHz = 0;
+        _webHasSpeech = false;
+        _webSpeechStartedAt = null;
+        _webLastVoiceAt = null;
       });
       await _startLiveAudioAnalyzerIfPossible();
       _webAutoStopTimer?.cancel();
-      _webAutoStopTimer = Timer(const Duration(seconds: 8), () {
+      _webAutoStopTimer = Timer(const Duration(seconds: 20), () {
         if (mounted && isListening) {
           _stopListening();
         }
@@ -356,13 +357,19 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     if (!isListening) return;
     _webAutoStopTimer?.cancel();
     _webAutoStopTimer = null;
+    final hasSpeech = !kIsWeb || _webHasSpeech;
     setState(() {
       isListening = false;
-      listeningStatusText = '음성 입력을 중지했습니다.';
+      listeningStatusText =
+          hasSpeech ? '음성 입력을 중지했습니다.' : '음성이 감지되지 않았습니다. 다시 시도해 주세요.';
     });
     await _stopLiveAudioAnalyzerIfPossible();
     if (!kIsWeb) {
       await _speech.stop();
+    }
+    if (!hasSpeech) {
+      await _stopWebMicRecordingIfPossible();
+      return;
     }
     await _finalizeAndEvaluate();
   }
@@ -371,6 +378,13 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     if (!kIsWeb) return;
     await _liveAudioAnalyzer.start((stats) {
       if (!mounted || !isListening) return;
+      final now = DateTime.now();
+      final isVoice = stats.levelNorm > 0.12 || stats.pitchHz > 75;
+      if (isVoice) {
+        _webLastVoiceAt = now;
+        _webSpeechStartedAt ??= now;
+        _webHasSpeech = true;
+      }
       setState(() {
         _liveSpeedEstimate = stats.syllablesPerSec;
         _livePitchEstimateHz = stats.pitchHz;
@@ -378,7 +392,19 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
         if (_liveInputCurve.length > 64) {
           _liveInputCurve.removeAt(0);
         }
+        if (_webHasSpeech) {
+          listeningStatusText = '발화 감지됨... 계속 말해 주세요.';
+        }
       });
+
+      final startedAt = _webSpeechStartedAt;
+      final lastVoiceAt = _webLastVoiceAt;
+      if (!_webHasSpeech || startedAt == null || lastVoiceAt == null) return;
+      final speechMs = now.difference(startedAt).inMilliseconds;
+      final silenceMs = now.difference(lastVoiceAt).inMilliseconds;
+      if (speechMs >= 700 && silenceMs >= 1200) {
+        _stopListening();
+      }
     });
   }
 
@@ -724,7 +750,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                               '#${chapter.id} #${chapter.title}',
                               style: const TextStyle(fontSize: 14),
                             ),
-                            if (kIsWeb && !speechRecognitionSupported) ...[
+                            if (!kIsWeb && !speechRecognitionSupported) ...[
                               const SizedBox(height: 8),
                               Container(
                                 width: double.infinity,
@@ -737,9 +763,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                   ),
                                 ),
                                 child: Text(
-                                  isLikelySafari
-                                      ? 'Safari에서는 웹 음성인식이 제한될 수 있습니다.'
-                                      : '현재 브라우저에서는 웹 음성인식이 제한될 수 있습니다.',
+                                  '현재 기기에서는 음성 인식 기능이 제한될 수 있습니다.',
                                   style: const TextStyle(fontSize: 12),
                                 ),
                               ),
@@ -953,11 +977,12 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                             ),
                             const SizedBox(height: 10),
                             ElevatedButton(
-                              onPressed: (kIsWeb && !speechRecognitionSupported)
-                                  ? null
-                                  : () => isListening
-                                      ? _stopListening()
-                                      : _startListening(),
+                              onPressed:
+                                  (!kIsWeb && !speechRecognitionSupported)
+                                      ? null
+                                      : () => isListening
+                                          ? _stopListening()
+                                          : _startListening(),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.black,
                                 minimumSize: const Size(double.infinity, 50),
