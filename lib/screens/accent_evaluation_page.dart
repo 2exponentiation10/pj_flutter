@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -48,6 +49,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   int _activeFrames = 0;
   double _liveSpeedEstimate = 0;
   double _livePitchEstimateHz = 0;
+  Timer? _webAutoStopTimer;
 
   List<AppSentence> sentences = [];
 
@@ -123,13 +125,41 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   }
 
   Future<void> _startListening() async {
-    if (kIsWeb && !speechRecognitionSupported) {
-      _showErrorDialog('이 브라우저에서는 음성 입력이 제한됩니다.');
+    await _checkPermissions();
+    if (kIsWeb) {
+      await _startWebMicRecordingIfPossible();
+      if (_webMicRecorder == null) {
+        _showErrorDialog('마이크 녹음을 시작할 수 없습니다. 브라우저 권한을 확인해 주세요.');
+        return;
+      }
+
+      setState(() {
+        isListening = true;
+        recognizedText = '';
+        listeningStatusText = '웹 녹음 중... 또박또박 말해 주세요.';
+        _liveInputCurve.clear();
+        _soundLevelMin = 0;
+        _soundLevelMax = 0;
+        _listenStartedAt = DateTime.now();
+        _lastSoundAt = null;
+        _activeFrames = 0;
+        _liveSpeedEstimate = 0;
+        _livePitchEstimateHz = 0;
+      });
+      await _startLiveAudioAnalyzerIfPossible();
+      _webAutoStopTimer?.cancel();
+      _webAutoStopTimer = Timer(const Duration(seconds: 8), () {
+        if (mounted && isListening) {
+          _stopListening();
+        }
+      });
       return;
     }
 
-    await _checkPermissions();
-    await _startWebMicRecordingIfPossible();
+    if (!speechRecognitionSupported) {
+      _showErrorDialog('이 기기에서는 음성 입력이 제한됩니다.');
+      return;
+    }
 
     final available = await _speech.initialize(
       onStatus: (status) {
@@ -198,12 +228,16 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
 
   Future<void> _stopListening() async {
     if (!isListening) return;
+    _webAutoStopTimer?.cancel();
+    _webAutoStopTimer = null;
     setState(() {
       isListening = false;
       listeningStatusText = '음성 입력을 중지했습니다.';
     });
     await _stopLiveAudioAnalyzerIfPossible();
-    await _speech.stop();
+    if (!kIsWeb) {
+      await _speech.stop();
+    }
     await _finalizeAndEvaluate();
   }
 
@@ -511,6 +545,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
 
   @override
   void dispose() {
+    _webAutoStopTimer?.cancel();
     _speech.stop();
     _liveAudioAnalyzer.dispose();
     _webMicRecorder?.dispose();
