@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -613,6 +614,60 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     return 'mic_input.webm';
   }
 
+  String _detectContentTypeFromFileName(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.wav')) return 'audio/wav';
+    if (lower.endsWith('.ogg')) return 'audio/ogg';
+    if (lower.endsWith('.m4a')) return 'audio/mp4';
+    if (lower.endsWith('.aac')) return 'audio/aac';
+    if (lower.endsWith('.mp3')) return 'audio/mpeg';
+    if (lower.endsWith('.webm')) return 'audio/webm';
+    if (lower.endsWith('.flac')) return 'audio/flac';
+    return 'audio/webm';
+  }
+
+  Future<void> _uploadAudioAndEvaluate() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        withData: true,
+        allowedExtensions: const [
+          'm4a',
+          'mp3',
+          'wav',
+          'ogg',
+          'webm',
+          'aac',
+          'flac',
+        ],
+      );
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      Uint8List? bytes = file.bytes;
+      if (bytes == null && file.path != null && !kIsWeb) {
+        bytes = await File(file.path!).readAsBytes();
+      }
+      if (bytes == null || bytes.isEmpty) {
+        _showErrorDialog('선택한 음성 파일을 읽을 수 없습니다.');
+        return;
+      }
+
+      final fileName = file.name.isNotEmpty ? file.name : 'uploaded_audio.m4a';
+      final contentType = _detectContentTypeFromFileName(fileName);
+      if (mounted) {
+        setState(() => listeningStatusText = '음성 파일 평가 중...');
+      }
+      await _evaluateSpeech(
+        audioBytes: bytes,
+        overrideContentType: contentType,
+        overrideFileName: fileName,
+      );
+    } catch (e) {
+      _showErrorDialog('음성 파일 업로드 실패: $e');
+    }
+  }
+
   void _showEvaluationPopup(PronunciationEvaluationResult result) {
     showDialog(
       context: context,
@@ -1042,6 +1097,17 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                 ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            OutlinedButton.icon(
+                              onPressed: _isFinalizing || isEvaluatingAudio
+                                  ? null
+                                  : _uploadAudioAndEvaluate,
+                              icon: const Icon(Icons.upload_file_rounded),
+                              label: const Text('음성 파일 업로드(임시)'),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(double.infinity, 50),
                               ),
                             ),
                             if (_isFinalizing || isEvaluatingAudio)
