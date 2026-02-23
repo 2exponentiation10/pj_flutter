@@ -15,10 +15,17 @@ class AdminConsolePage extends StatefulWidget {
   State<AdminConsolePage> createState() => _AdminConsolePageState();
 }
 
-class _AdminConsolePageState extends State<AdminConsolePage> {
+class _AdminConsolePageState extends State<AdminConsolePage>
+    with SingleTickerProviderStateMixin {
   final ApiService _api = ApiService();
+  final TextEditingController _searchController = TextEditingController();
+
+  late final TabController _tabController;
 
   bool _isLoading = true;
+  String _searchQuery = '';
+  String _assetCategoryFilter = 'all';
+
   List<Chapter> _chapters = const [];
   List<Word> _words = const [];
   List<AppSentence> _sentences = const [];
@@ -27,7 +34,18 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 4, vsync: this)
+      ..addListener(() {
+        if (mounted) setState(() {});
+      });
     _refreshAll();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _refreshAll() async {
@@ -55,6 +73,32 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  bool _matches(String text) {
+    if (_searchQuery.trim().isEmpty) return true;
+    return text.toLowerCase().contains(_searchQuery.trim().toLowerCase());
+  }
+
+  Future<bool> _confirmDelete(String title, String message) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(title),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('취소'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('삭제'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   Future<void> _openChapterDialog({Chapter? initial}) async {
@@ -92,7 +136,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                 TextField(
                   controller: contextCtrl,
                   decoration:
-                      const InputDecoration(labelText: '카테고리 태그 (context_tag)'),
+                      const InputDecoration(labelText: '상황 태그(context_tag)'),
                 ),
               ],
             ),
@@ -303,15 +347,13 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                     ),
                     const SizedBox(height: 10),
                     TextField(
-                      controller: labelCtrl,
-                      decoration: const InputDecoration(labelText: '라벨(선택)'),
-                    ),
+                        controller: labelCtrl,
+                        decoration: const InputDecoration(labelText: '라벨(선택)')),
                     const SizedBox(height: 10),
                     TextField(
                       controller: keyCtrl,
                       decoration: const InputDecoration(
-                        labelText: 'key_text(자동매핑용: 단어/문장 원문)',
-                      ),
+                          labelText: 'key_text(자동매핑용: 단어/문장 원문)'),
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<int?>(
@@ -321,9 +363,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                             value: null, child: Text('챕터 연결 없음')),
                         ..._chapters.map(
                           (c) => DropdownMenuItem<int?>(
-                            value: c.id,
-                            child: Text('#${c.id} ${c.title}'),
-                          ),
+                              value: c.id, child: Text('#${c.id} ${c.title}')),
                         ),
                       ],
                       onChanged: (v) => chapterId = v,
@@ -337,9 +377,8 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                             value: null, child: Text('단어 연결 없음')),
                         ..._words.map(
                           (w) => DropdownMenuItem<int?>(
-                            value: w.id,
-                            child: Text('#${w.id} ${w.koreanWord}'),
-                          ),
+                              value: w.id,
+                              child: Text('#${w.id} ${w.koreanWord}')),
                         ),
                       ],
                       onChanged: (v) => wordId = v,
@@ -442,192 +481,364 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 4,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('시나브로 관리자'),
-          bottom: const TabBar(
+    final currentTab = _tabController.index;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('시나브로 Admin Studio'),
+        actions: [
+          IconButton(
+              onPressed: _refreshAll, icon: const Icon(Icons.refresh_rounded)),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          if (currentTab == 0) {
+            _openAssetDialog();
+          } else if (currentTab == 1) {
+            _openChapterDialog();
+          } else if (currentTab == 2) {
+            _openWordDialog();
+          } else {
+            _openSentenceDialog();
+          }
+        },
+        label: Text(currentTab == 0 ? '이미지 업로드' : '콘텐츠 추가'),
+        icon: const Icon(Icons.add),
+      ),
+      body: Column(
+        children: [
+          _buildOverviewPanel(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (v) => setState(() => _searchQuery = v),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _searchQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                hintText: '단어/문장/태그 검색',
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TabBar(
+            controller: _tabController,
             isScrollable: true,
-            tabs: [
+            tabs: const [
               Tab(text: '이미지'),
               Tab(text: '챕터'),
               Tab(text: '단어'),
               Tab(text: '문장'),
             ],
           ),
-          actions: [
-            IconButton(
-                onPressed: _refreshAll,
-                icon: const Icon(Icons.refresh_rounded)),
+          const SizedBox(height: 8),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildAssetTab(),
+                      _buildChapterTab(),
+                      _buildWordTab(),
+                      _buildSentenceTab(),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOverviewPanel() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+            Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
           ],
         ),
-        floatingActionButton: Builder(
-          builder: (context) {
-            final tab = DefaultTabController.of(context).index;
-            return FloatingActionButton.extended(
-              onPressed: () {
-                if (tab == 0) {
-                  _openAssetDialog();
-                } else if (tab == 1) {
-                  _openChapterDialog();
-                } else if (tab == 2) {
-                  _openWordDialog();
-                } else {
-                  _openSentenceDialog();
-                }
-              },
-              label: const Text('추가'),
-              icon: const Icon(Icons.add),
-            );
-          },
-        ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : TabBarView(
-                children: [
-                  _buildAssetTab(),
-                  _buildChapterTab(),
-                  _buildWordTab(),
-                  _buildSentenceTab(),
-                ],
-              ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '콘텐츠 운영 대시보드',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 4),
+          const Text('챕터, 단어/문장, 이미지 자산을 한 곳에서 관리합니다.'),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _metricChip(Icons.menu_book_rounded, '챕터 ${_chapters.length}'),
+              _metricChip(Icons.spellcheck_rounded, '단어 ${_words.length}'),
+              _metricChip(Icons.short_text_rounded, '문장 ${_sentences.length}'),
+              _metricChip(Icons.image_rounded, '이미지 ${_assets.length}'),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _metricChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16),
+          const SizedBox(width: 6),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+        ],
       ),
     );
   }
 
   Widget _buildAssetTab() {
-    if (_assets.isEmpty) return const Center(child: Text('이미지 자산이 없습니다.'));
-    return ListView.separated(
-      itemCount: _assets.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final item = _assets[index];
-        return ListTile(
-          leading: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              item.imageUrl,
-              width: 48,
-              height: 48,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                width: 48,
-                height: 48,
-                color: Colors.grey.shade300,
-                alignment: Alignment.center,
-                child: const Icon(Icons.broken_image_outlined),
-              ),
+    final filtered = _assets.where((item) {
+      final byCategory = _assetCategoryFilter == 'all' ||
+          item.category == _assetCategoryFilter;
+      final byQuery =
+          _matches('${item.label} ${item.keyText} ${item.category}');
+      return byCategory && byQuery;
+    }).toList();
+
+    return RefreshIndicator(
+      onRefresh: _refreshAll,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _categoryChip('all', '전체'),
+              _categoryChip('word', '단어'),
+              _categoryChip('sentence', '문장'),
+              _categoryChip('chapter', '챕터'),
+              _categoryChip('general', '일반'),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (filtered.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 40),
+              child: Center(child: Text('조건에 맞는 이미지 자산이 없습니다.')),
             ),
-          ),
-          title: Text(
-              '[${item.category}] ${item.label.isEmpty ? '(무라벨)' : item.label}'),
-          subtitle: Text(
-            'key=${item.keyText} / chapter=${item.chapterId ?? '-'} / word=${item.wordId ?? '-'} / sentence=${item.sentenceId ?? '-'}',
-          ),
-          trailing: IconButton(
-            icon: const Icon(Icons.delete_outline_rounded),
-            onPressed: () async {
-              await _api.deleteMediaAsset(item.id);
-              await _refreshAll();
-            },
-          ),
-        );
-      },
+          ...filtered.map((item) => Card(
+                child: ListTile(
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      item.imageUrl,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 56,
+                        height: 56,
+                        color: Colors.grey.shade300,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.broken_image_outlined),
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                      '[${item.category}] ${item.label.isEmpty ? '(무라벨)' : item.label}'),
+                  subtitle: Text(
+                    'key=${item.keyText.isEmpty ? '-' : item.keyText}\nchapter=${item.chapterId ?? '-'} / word=${item.wordId ?? '-'} / sentence=${item.sentenceId ?? '-'}',
+                  ),
+                  isThreeLine: true,
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    onPressed: () async {
+                      final ok =
+                          await _confirmDelete('이미지 삭제', '선택한 이미지 자산을 삭제할까요?');
+                      if (!ok) return;
+                      await _api.deleteMediaAsset(item.id);
+                      await _refreshAll();
+                    },
+                  ),
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _categoryChip(String value, String label) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: _assetCategoryFilter == value,
+      onSelected: (_) => setState(() => _assetCategoryFilter = value),
+      showCheckmark: false,
     );
   }
 
   Widget _buildChapterTab() {
-    if (_chapters.isEmpty) return const Center(child: Text('챕터가 없습니다.'));
-    return ListView.separated(
-      itemCount: _chapters.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final c = _chapters[index];
-        return ListTile(
-          title: Text('#${c.id} ${c.title}'),
-          subtitle: Text('difficulty=${c.difficulty}, context=${c.contextTag}'),
-          trailing: Wrap(
-            spacing: 8,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.edit_outlined),
-                onPressed: () => _openChapterDialog(initial: c),
+    final filtered = _chapters.where((c) {
+      return _matches('${c.id} ${c.title} ${c.contextTag} ${c.difficulty}');
+    }).toList();
+
+    return RefreshIndicator(
+      onRefresh: _refreshAll,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+        children: [
+          if (filtered.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 40),
+              child: Center(child: Text('조건에 맞는 챕터가 없습니다.')),
+            ),
+          ...filtered.map(
+            (c) => Card(
+              child: ListTile(
+                title: Text('#${c.id} ${c.title}'),
+                subtitle: Text('난이도 ${c.difficulty} · 태그 ${c.contextTag}'),
+                trailing: Wrap(
+                  spacing: 8,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined),
+                      onPressed: () => _openChapterDialog(initial: c),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      onPressed: () async {
+                        final ok = await _confirmDelete(
+                            '챕터 삭제', '챕터를 삭제하면 하위 데이터 영향이 있을 수 있습니다. 계속할까요?');
+                        if (!ok) return;
+                        await _api.deleteChapter(c.id);
+                        await _refreshAll();
+                      },
+                    ),
+                  ],
+                ),
               ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded),
-                onPressed: () async {
-                  await _api.deleteChapter(c.id);
-                  await _refreshAll();
-                },
-              ),
-            ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
   Widget _buildWordTab() {
-    if (_words.isEmpty) return const Center(child: Text('단어가 없습니다.'));
-    return ListView.separated(
-      itemCount: _words.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final w = _words[index];
-        return ListTile(
-          title: Text('#${w.id} ${w.koreanWord}'),
-          subtitle: Text('북한어: ${w.northKoreanWord} / chapter=${w.chapterId}'),
-          trailing: Wrap(
-            spacing: 8,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.edit_outlined),
-                onPressed: () => _openWordDialog(initial: w),
+    final filtered = _words.where((w) {
+      return _matches(
+          '${w.id} ${w.koreanWord} ${w.northKoreanWord} ${w.chapterId}');
+    }).toList();
+
+    return RefreshIndicator(
+      onRefresh: _refreshAll,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+        children: [
+          if (filtered.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 40),
+              child: Center(child: Text('조건에 맞는 단어가 없습니다.')),
+            ),
+          ...filtered.map(
+            (w) => Card(
+              child: ListTile(
+                title: Text('#${w.id} ${w.koreanWord}'),
+                subtitle:
+                    Text('북한어: ${w.northKoreanWord} · chapter=${w.chapterId}'),
+                trailing: Wrap(
+                  spacing: 8,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined),
+                      onPressed: () => _openWordDialog(initial: w),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      onPressed: () async {
+                        final ok =
+                            await _confirmDelete('단어 삭제', '선택한 단어를 삭제할까요?');
+                        if (!ok) return;
+                        await _api.deleteWord(w.id);
+                        await _refreshAll();
+                      },
+                    ),
+                  ],
+                ),
               ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded),
-                onPressed: () async {
-                  await _api.deleteWord(w.id);
-                  await _refreshAll();
-                },
-              ),
-            ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
   Widget _buildSentenceTab() {
-    if (_sentences.isEmpty) return const Center(child: Text('문장이 없습니다.'));
-    return ListView.separated(
-      itemCount: _sentences.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final s = _sentences[index];
-        return ListTile(
-          title: Text('#${s.id} ${s.koreanSentence}'),
-          subtitle:
-              Text('북한식: ${s.northKoreanSentence} / chapter=${s.chapterId}'),
-          trailing: Wrap(
-            spacing: 8,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.edit_outlined),
-                onPressed: () => _openSentenceDialog(initial: s),
+    final filtered = _sentences.where((s) {
+      return _matches(
+          '${s.id} ${s.koreanSentence} ${s.northKoreanSentence} ${s.chapterId}');
+    }).toList();
+
+    return RefreshIndicator(
+      onRefresh: _refreshAll,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+        children: [
+          if (filtered.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 40),
+              child: Center(child: Text('조건에 맞는 문장이 없습니다.')),
+            ),
+          ...filtered.map(
+            (s) => Card(
+              child: ListTile(
+                title: Text('#${s.id} ${s.koreanSentence}'),
+                subtitle: Text(
+                    '북한식: ${s.northKoreanSentence} · chapter=${s.chapterId}'),
+                trailing: Wrap(
+                  spacing: 8,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined),
+                      onPressed: () => _openSentenceDialog(initial: s),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      onPressed: () async {
+                        final ok =
+                            await _confirmDelete('문장 삭제', '선택한 문장을 삭제할까요?');
+                        if (!ok) return;
+                        await _api.deleteSentence(s.id);
+                        await _refreshAll();
+                      },
+                    ),
+                  ],
+                ),
               ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded),
-                onPressed: () async {
-                  await _api.deleteSentence(s.id);
-                  await _refreshAll();
-                },
-              ),
-            ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
