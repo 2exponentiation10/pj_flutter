@@ -283,3 +283,62 @@ class HeroIntroCard extends StatelessWidget {
     );
   }
 }
+
+class ManagedImage extends StatelessWidget {
+  final String? imageUrl;
+  final String fallbackAssetPath;
+  final double width;
+  final double height;
+  final BoxFit fit;
+
+  const ManagedImage({
+    super.key,
+    required this.imageUrl,
+    required this.fallbackAssetPath,
+    required this.width,
+    required this.height,
+    this.fit = BoxFit.cover,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final url = (imageUrl ?? '').trim();
+    if (url.isNotEmpty) {
+      return Image.network(
+        url,
+        width: width,
+        height: height,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) {
+          return Image.asset(
+            fallbackAssetPath,
+            width: width,
+            height: height,
+            fit: fit,
+            errorBuilder: (context, _, __) => Container(
+              width: width,
+              height: height,
+              color: Colors.grey.shade200,
+              alignment: Alignment.center,
+              child: const Text('이미지를 불러올 수 없습니다.'),
+            ),
+          );
+        },
+      );
+    }
+
+    return Image.asset(
+      fallbackAssetPath,
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: (context, _, __) => Container(
+        width: width,
+        height: height,
+        color: Colors.grey.shade200,
+        alignment: Alignment.center,
+        child: const Text('이미지를 불러올 수 없습니다.'),
+      ),
+    );
+  }
+}

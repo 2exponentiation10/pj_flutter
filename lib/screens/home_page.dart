@@ -4,6 +4,7 @@ import '../models/models.dart';
 import '../services/api_service.dart';
 import '../widgets/custom_widgets.dart';
 import 'chat_page.dart';
+import 'admin_console_page.dart';
 import 'evaluation_page.dart';
 import 'learning_page.dart';
 import 'library_page.dart';
@@ -20,6 +21,8 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
+  int _logoTapCount = 0;
+  DateTime? _lastLogoTapAt;
 
   static final List<Widget> _widgetOptions = <Widget>[
     const HomeContent(),
@@ -39,7 +42,9 @@ class _HomePageState extends State<HomePage> {
     final titles = ['시나브로', '보관함', '진행도', '설정'];
 
     return Scaffold(
-      appBar: AppBar(title: Text(titles[_selectedIndex])),
+      appBar: AppBar(
+        title: _buildAppBarTitle(titles[_selectedIndex]),
+      ),
       body: AppShell(child: _widgetOptions.elementAt(_selectedIndex)),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
@@ -53,6 +58,43 @@ class _HomePageState extends State<HomePage> {
         ],
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
+      ),
+    );
+  }
+
+  Widget _buildAppBarTitle(String title) {
+    if (_selectedIndex != 0) return Text(title);
+    return GestureDetector(
+      onTap: () {
+        final now = DateTime.now();
+        if (_lastLogoTapAt == null ||
+            now.difference(_lastLogoTapAt!) > const Duration(seconds: 3)) {
+          _logoTapCount = 0;
+        }
+        _lastLogoTapAt = now;
+        _logoTapCount += 1;
+        if (_logoTapCount >= 10) {
+          _logoTapCount = 0;
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AdminConsolePage()),
+          );
+          return;
+        }
+        if (_logoTapCount >= 7) {
+          final remaining = 10 - _logoTapCount;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('관리자 모드까지 $remaining번 더 터치하세요.')),
+          );
+        }
+      },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.auto_awesome_rounded, size: 18),
+          SizedBox(width: 8),
+          Text('시나브로'),
+        ],
       ),
     );
   }
@@ -128,8 +170,7 @@ class HomeContent extends StatelessWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (context) => const LearningPage()),
+                  MaterialPageRoute(builder: (context) => const LearningPage()),
                 );
               },
             ),

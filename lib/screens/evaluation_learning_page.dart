@@ -7,16 +7,17 @@ import 'package:http/http.dart' as http;
 
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../widgets/custom_widgets.dart';
 import 'evaluation_result_page.dart';
 
 // EvaluationLearningPage 클래스는 단어 평가 화면을 나타내는 StatefulWidget입니다.
 class EvaluationLearningPage extends StatefulWidget {
   final int chapterId; // 챕터의 ID입니다.
 
-  EvaluationLearningPage({required this.chapterId});
+  const EvaluationLearningPage({required this.chapterId, super.key});
 
   @override
-  _EvaluationLearningPageState createState() => _EvaluationLearningPageState();
+  State<EvaluationLearningPage> createState() => _EvaluationLearningPageState();
 }
 
 // _EvaluationLearningPageState 클래스는 EvaluationLearningPage의 상태를 관리합니다.
@@ -177,20 +178,15 @@ class _EvaluationLearningPageState extends State<EvaluationLearningPage> {
                                 Text('#${chapter.id} #${chapter.title}',
                                     style: TextStyle(fontSize: 14)),
                                 SizedBox(height: 10),
-                                Image.asset(
-                                  'assets/images/${currentWord.koreanWord}.png',
+                                ManagedImage(
+                                  imageUrl: currentWord.imageUrl,
+                                  fallbackAssetPath:
+                                      'assets/images/${currentWord.koreanWord}.png',
                                   width: double.infinity,
                                   height: (MediaQuery.of(context).size.height *
                                           0.26)
                                       .clamp(140.0, 220.0)
                                       .toDouble(),
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Text('Error loading image',
-                                        style: TextStyle(
-                                            color: Colors
-                                                .red)); // 이미지 로드 오류 시 표시되는 텍스트입니다.
-                                  },
                                 ),
                                 SizedBox(height: 10),
                                 Container(

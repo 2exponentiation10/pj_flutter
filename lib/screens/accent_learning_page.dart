@@ -22,7 +22,7 @@ import '../services/api_service.dart';
 import '../services/browser_capability.dart';
 import '../services/live_audio_analyzer.dart';
 import '../services/tts_service.dart';
-import '../services/web_audio_capture.dart';
+import '../widgets/custom_widgets.dart';
 import '../widgets/voice_curve_compare_chart.dart';
 import 'accent_learning_result_page.dart';
 
@@ -246,22 +246,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     if (kIsWeb) {
       await _startWebMicRecordingIfPossible();
       if (_webMicRecorder == null) {
-        final fallback = await captureAudioFromBrowser();
-        if (fallback != null && fallback.bytes.isNotEmpty) {
-          if (mounted) {
-            setState(() {
-              listeningStatusText = '녹음 업로드 평가 중...';
-            });
-          }
-          await _evaluateSpeech(
-            audioBytes: fallback.bytes,
-            overrideContentType: fallback.mimeType,
-            overrideFileName: fallback.fileName,
-          );
-          return;
-        }
-        final message = _buildWebMicInitErrorMessage() +
-            '\n(대안) 파일 업로드 방식 녹음이 취소되었거나 실패했습니다.';
+        final message = _buildWebMicInitErrorMessage();
         setState(() {
           listeningStatusText = message;
         });
@@ -838,20 +823,15 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                               ),
                             ],
                             const SizedBox(height: 10),
-                            Image.asset(
-                              'assets/images/${currentSentence.koreanSentence}.png',
+                            ManagedImage(
+                              imageUrl: currentSentence.imageUrl,
+                              fallbackAssetPath:
+                                  'assets/images/${currentSentence.koreanSentence}.png',
                               width: double.infinity,
                               height:
                                   (MediaQuery.of(context).size.height * 0.26)
                                       .clamp(140.0, 220.0)
                                       .toDouble(),
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return const Text(
-                                  'Error loading image',
-                                  style: TextStyle(color: Colors.red),
-                                );
-                              },
                             ),
                             const SizedBox(height: 10),
                             Container(

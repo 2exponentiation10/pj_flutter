@@ -126,6 +126,15 @@ class ApiService {
     }
   }
 
+  Future<List<Word>> fetchAllWords() async {
+    final response = await http.get(Uri.parse('$baseUrl/words/'));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load words');
+    }
+    final data = json.decode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+    return data.map((item) => Word.fromJson(item)).toList();
+  }
+
   Future<void> saveWord(int wordId) async {
     final response = await http.post(
       Uri.parse('${baseUrl}/words/$wordId/save/'),
@@ -162,6 +171,15 @@ class ApiService {
           'Failed to load sentences: ${response.statusCode} ${response.body}');
       throw Exception('Failed to load sentences');
     }
+  }
+
+  Future<List<AppSentence>> fetchAllSentences() async {
+    final response = await http.get(Uri.parse('$baseUrl/sentences/'));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load sentences');
+    }
+    final data = json.decode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+    return data.map((item) => AppSentence.fromJson(item)).toList();
   }
 
   Future<void> saveSentence(int sentenceId) async {
@@ -383,5 +401,231 @@ class ApiService {
     }
     throw Exception(
         'Failed to evaluate pronunciation: ${response.statusCode} ${response.body}');
+  }
+
+  Future<Chapter> createChapter({
+    required String title,
+    String difficulty = 'beginner',
+    String contextTag = 'daily',
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/chapters/'),
+      headers: {'Content-Type': 'application/json; charset=UTF-8'},
+      body: jsonEncode({
+        'title': title,
+        'difficulty': difficulty,
+        'context_tag': contextTag,
+        'accuracy': 0.0,
+      }),
+    );
+    if (response.statusCode != 201) {
+      throw Exception('Failed to create chapter: ${response.body}');
+    }
+    return Chapter.fromJson(
+      json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+    );
+  }
+
+  Future<Chapter> updateChapter({
+    required int chapterId,
+    required String title,
+    required String difficulty,
+    required String contextTag,
+  }) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/chapters/$chapterId/'),
+      headers: {'Content-Type': 'application/json; charset=UTF-8'},
+      body: jsonEncode({
+        'title': title,
+        'difficulty': difficulty,
+        'context_tag': contextTag,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update chapter: ${response.body}');
+    }
+    return Chapter.fromJson(
+      json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+    );
+  }
+
+  Future<void> deleteChapter(int chapterId) async {
+    final response =
+        await http.delete(Uri.parse('$baseUrl/chapters/$chapterId/'));
+    if (response.statusCode != 204) {
+      throw Exception('Failed to delete chapter: ${response.body}');
+    }
+  }
+
+  Future<Word> createWord({
+    required int chapterId,
+    required String koreanWord,
+    required String northKoreanWord,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/words/'),
+      headers: {'Content-Type': 'application/json; charset=UTF-8'},
+      body: jsonEncode({
+        'chapter': chapterId,
+        'korean_word': koreanWord,
+        'north_korean_word': northKoreanWord,
+        'is_called': false,
+        'is_correct': false,
+        'is_collect': false,
+        'accuracy': 0.0,
+      }),
+    );
+    if (response.statusCode != 201) {
+      throw Exception('Failed to create word: ${response.body}');
+    }
+    return Word.fromJson(
+      json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+    );
+  }
+
+  Future<Word> updateWordContent({
+    required int wordId,
+    required int chapterId,
+    required String koreanWord,
+    required String northKoreanWord,
+  }) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/words/$wordId/'),
+      headers: {'Content-Type': 'application/json; charset=UTF-8'},
+      body: jsonEncode({
+        'chapter': chapterId,
+        'korean_word': koreanWord,
+        'north_korean_word': northKoreanWord,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update word: ${response.body}');
+    }
+    return Word.fromJson(
+      json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+    );
+  }
+
+  Future<void> deleteWord(int wordId) async {
+    final response = await http.delete(Uri.parse('$baseUrl/words/$wordId/'));
+    if (response.statusCode != 204) {
+      throw Exception('Failed to delete word: ${response.body}');
+    }
+  }
+
+  Future<AppSentence> createSentence({
+    required int chapterId,
+    required String koreanSentence,
+    required String northKoreanSentence,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/sentences/'),
+      headers: {'Content-Type': 'application/json; charset=UTF-8'},
+      body: jsonEncode({
+        'chapter': chapterId,
+        'korean_sentence': koreanSentence,
+        'north_korean_sentence': northKoreanSentence,
+        'is_called': false,
+        'is_correct': false,
+        'is_collect': false,
+        'accuracy': 0.0,
+      }),
+    );
+    if (response.statusCode != 201) {
+      throw Exception('Failed to create sentence: ${response.body}');
+    }
+    return AppSentence.fromJson(
+      json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+    );
+  }
+
+  Future<AppSentence> updateSentenceContent({
+    required int sentenceId,
+    required int chapterId,
+    required String koreanSentence,
+    required String northKoreanSentence,
+  }) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/sentences/$sentenceId/'),
+      headers: {'Content-Type': 'application/json; charset=UTF-8'},
+      body: jsonEncode({
+        'chapter': chapterId,
+        'korean_sentence': koreanSentence,
+        'north_korean_sentence': northKoreanSentence,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update sentence: ${response.body}');
+    }
+    return AppSentence.fromJson(
+      json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+    );
+  }
+
+  Future<void> deleteSentence(int sentenceId) async {
+    final response =
+        await http.delete(Uri.parse('$baseUrl/sentences/$sentenceId/'));
+    if (response.statusCode != 204) {
+      throw Exception('Failed to delete sentence: ${response.body}');
+    }
+  }
+
+  Future<List<MediaAssetItem>> fetchMediaAssets() async {
+    final response = await http.get(Uri.parse('$baseUrl/media-assets/'));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load media assets');
+    }
+    final list = json.decode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(MediaAssetItem.fromJson)
+        .toList();
+  }
+
+  Future<MediaAssetItem> createMediaAsset({
+    required Uint8List bytes,
+    required String fileName,
+    required String contentType,
+    required String category,
+    String label = '',
+    String keyText = '',
+    int? chapterId,
+    int? wordId,
+    int? sentenceId,
+  }) async {
+    final req = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/media-assets/'),
+    );
+    req.fields['category'] = category;
+    req.fields['label'] = label;
+    req.fields['key_text'] = keyText;
+    if (chapterId != null) req.fields['chapter'] = chapterId.toString();
+    if (wordId != null) req.fields['word'] = wordId.toString();
+    if (sentenceId != null) req.fields['sentence'] = sentenceId.toString();
+    req.files.add(
+      http.MultipartFile.fromBytes(
+        'image',
+        bytes,
+        filename: fileName,
+        contentType: MediaType.parse(contentType),
+      ),
+    );
+    final streamed = await req.send();
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode != 201) {
+      throw Exception('Failed to create media asset: ${response.body}');
+    }
+    return MediaAssetItem.fromJson(
+      json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+    );
+  }
+
+  Future<void> deleteMediaAsset(int assetId) async {
+    final response =
+        await http.delete(Uri.parse('$baseUrl/media-assets/$assetId/'));
+    if (response.statusCode != 204) {
+      throw Exception('Failed to delete media asset: ${response.body}');
+    }
   }
 }

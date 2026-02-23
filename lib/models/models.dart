@@ -4,6 +4,7 @@ class Chapter {
   final String title; // 챕터의 제목입니다.
   final String difficulty; // 난이도 태그입니다.
   final String contextTag; // 상황 태그입니다.
+  final String coverImageUrl;
 
   // Chapter 객체를 초기화하는 생성자입니다.
   Chapter({
@@ -11,6 +12,7 @@ class Chapter {
     required this.title,
     this.difficulty = 'beginner',
     this.contextTag = 'daily',
+    this.coverImageUrl = '',
   });
 
   // JSON으로부터 Chapter 객체를 생성하는 팩토리 메서드입니다.
@@ -20,6 +22,7 @@ class Chapter {
       title: json['title'],
       difficulty: (json['difficulty'] ?? 'beginner').toString(),
       contextTag: (json['context_tag'] ?? 'daily').toString(),
+      coverImageUrl: (json['cover_image_url'] ?? '').toString(),
     );
   }
 }
@@ -33,6 +36,7 @@ class Word {
   bool isCalled; // 단어가 호출되었는지 여부를 나타냅니다.
   bool isCorrect; // 단어가 정답으로 맞춰졌는지 여부를 나타냅니다.
   bool isCollect; // 단어가 수집되었는지 여부를 나타냅니다.
+  final String imageUrl;
 
   // Word 객체를 초기화하는 생성자입니다.
   Word({
@@ -43,6 +47,7 @@ class Word {
     this.isCalled = false,
     this.isCorrect = false,
     this.isCollect = false,
+    this.imageUrl = '',
   });
 
   // JSON으로부터 Word 객체를 생성하는 팩토리 메서드입니다.
@@ -55,6 +60,7 @@ class Word {
       isCalled: json['is_called'],
       isCorrect: json['is_correct'],
       isCollect: json['is_collect'],
+      imageUrl: (json['image_url'] ?? '').toString(),
     );
   }
 }
@@ -122,6 +128,7 @@ class AppSentence {
   bool isCollect; // 문장이 수집되었는지 여부를 나타냅니다.
   double accuracy; // 문장의 정확도입니다.
   String recognizedText; // 인식된 텍스트입니다.
+  final String imageUrl;
 
   // AppSentence 객체를 초기화하는 생성자입니다.
   AppSentence({
@@ -134,6 +141,7 @@ class AppSentence {
     this.isCollect = false,
     this.accuracy = 0.0,
     this.recognizedText = '',
+    this.imageUrl = '',
   });
 
   // JSON으로부터 AppSentence 객체를 생성하는 팩토리 메서드입니다.
@@ -148,6 +156,44 @@ class AppSentence {
       isCollect: json['is_collect'] ?? false,
       accuracy: (json['accuracy'] ?? 0.0).toDouble(),
       recognizedText: json['recognized_text'] ?? '',
+      imageUrl: (json['image_url'] ?? '').toString(),
+    );
+  }
+}
+
+class MediaAssetItem {
+  final int id;
+  final String category;
+  final String label;
+  final String keyText;
+  final int? chapterId;
+  final int? wordId;
+  final int? sentenceId;
+  final String imageUrl;
+
+  MediaAssetItem({
+    required this.id,
+    required this.category,
+    required this.label,
+    required this.keyText,
+    this.chapterId,
+    this.wordId,
+    this.sentenceId,
+    required this.imageUrl,
+  });
+
+  factory MediaAssetItem.fromJson(Map<String, dynamic> json) {
+    return MediaAssetItem(
+      id: json['id'] as int,
+      category: (json['category'] ?? 'general').toString(),
+      label: (json['label'] ?? '').toString(),
+      keyText: (json['key_text'] ?? '').toString(),
+      chapterId:
+          json['chapter'] == null ? null : (json['chapter'] as num).toInt(),
+      wordId: json['word'] == null ? null : (json['word'] as num).toInt(),
+      sentenceId:
+          json['sentence'] == null ? null : (json['sentence'] as num).toInt(),
+      imageUrl: (json['image_url'] ?? '').toString(),
     );
   }
 }

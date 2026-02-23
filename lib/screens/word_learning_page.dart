@@ -13,15 +13,15 @@ import 'package:animated_text_kit/animated_text_kit.dart';
 import '../services/api_service.dart';
 import '../services/tts_service.dart';
 import '../models/models.dart';
-import 'evaluation_learning_result_page.dart';
+import '../widgets/custom_widgets.dart';
 
 class WordLearningPage extends StatefulWidget {
   final int chapterId;
 
-  WordLearningPage({required this.chapterId});
+  const WordLearningPage({required this.chapterId, super.key});
 
   @override
-  _WordLearningPageState createState() => _WordLearningPageState();
+  State<WordLearningPage> createState() => _WordLearningPageState();
 }
 
 class _WordLearningPageState extends State<WordLearningPage> {
@@ -224,18 +224,15 @@ class _WordLearningPageState extends State<WordLearningPage> {
                                 Text('#${chapter.id} #${chapter.title}',
                                     style: TextStyle(fontSize: 14)),
                                 SizedBox(height: 10),
-                                Image.asset(
-                                  'assets/images/${currentWord.koreanWord}.png',
+                                ManagedImage(
+                                  imageUrl: currentWord.imageUrl,
+                                  fallbackAssetPath:
+                                      'assets/images/${currentWord.koreanWord}.png',
                                   width: double.infinity,
                                   height: (MediaQuery.of(context).size.height *
                                           0.26)
                                       .clamp(140.0, 220.0)
                                       .toDouble(),
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Text('Error loading image',
-                                        style: TextStyle(color: Colors.red));
-                                  },
                                 ),
                                 SizedBox(height: 10),
                                 Container(
