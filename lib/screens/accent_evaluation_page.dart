@@ -12,6 +12,7 @@ import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/browser_capability.dart';
 import '../services/live_audio_analyzer.dart';
+import '../services/web_audio_capture.dart';
 import '../widgets/voice_curve_compare_chart.dart';
 import 'accent_evaluation_result_page.dart';
 
@@ -129,7 +130,22 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
     if (kIsWeb) {
       await _startWebMicRecordingIfPossible();
       if (_webMicRecorder == null) {
-        final message = _buildWebMicInitErrorMessage();
+        final fallback = await captureAudioFromBrowser();
+        if (fallback != null && fallback.bytes.isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              listeningStatusText = '녹음 업로드 평가 중...';
+            });
+          }
+          await _evaluateRecognizedText(
+            audioBytes: fallback.bytes,
+            overrideContentType: fallback.mimeType,
+            overrideFileName: fallback.fileName,
+          );
+          return;
+        }
+        final message = _buildWebMicInitErrorMessage() +
+            '\n(대안) 파일 업로드 방식 녹음이 취소되었거나 실패했습니다.';
         setState(() {
           listeningStatusText = message;
         });
@@ -409,7 +425,11 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
     }
   }
 
-  Future<void> _evaluateRecognizedText({Uint8List? audioBytes}) async {
+  Future<void> _evaluateRecognizedText({
+    Uint8List? audioBytes,
+    String? overrideContentType,
+    String? overrideFileName,
+  }) async {
     final sentence = sentences[currentIndex];
     if (audioBytes == null || audioBytes.isEmpty) {
       _showErrorDialog('녹음된 음성이 없습니다. 다시 시도해 주세요.');
@@ -417,13 +437,14 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
     }
 
     try {
-      final contentType = _detectAudioContentType(audioBytes);
+      final contentType =
+          overrideContentType ?? _detectAudioContentType(audioBytes);
       final result = await _api.evaluatePronunciation(
         sentenceId: sentence.id,
         referenceText: sentence.koreanSentence,
         recognizedText: '',
         audioBytes: audioBytes,
-        fileName: _buildAudioFileName(contentType),
+        fileName: overrideFileName ?? _buildAudioFileName(contentType),
         contentType: contentType,
       );
       await _applyEvaluationResult(sentence, result);
