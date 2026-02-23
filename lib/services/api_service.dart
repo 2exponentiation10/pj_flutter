@@ -263,6 +263,19 @@ class ApiService {
     }
   }
 
+  Future<List<ReviewQueueItem>> fetchReviewQueue({int limit = 12}) async {
+    final response =
+        await http.get(Uri.parse('$baseUrl/review_queue/?limit=$limit'));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load review queue');
+    }
+    final data = json.decode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(ReviewQueueItem.fromJson)
+        .toList();
+  }
+
   Future<List<Word>> fetchIncollectWords(int chapterId) async {
     final response = await http.get(
       Uri.parse('$baseUrl/chapters/$chapterId/incollect_words/'),

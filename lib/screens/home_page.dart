@@ -8,6 +8,7 @@ import 'evaluation_page.dart';
 import 'learning_page.dart';
 import 'library_page.dart';
 import 'progress_page.dart';
+import 'review_queue_page.dart';
 import 'settings_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -175,6 +176,18 @@ class HomeContent extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => ChatPage()),
+                );
+              },
+            ),
+            ActionTile(
+              title: '복습 추천 큐',
+              subtitle: '최근 발음 결과 기반 개인화 복습',
+              icon: Icons.assignment_turned_in_rounded,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const ReviewQueuePage()),
                 );
               },
             ),

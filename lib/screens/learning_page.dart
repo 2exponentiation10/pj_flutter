@@ -14,6 +14,7 @@ class LearningPage extends StatefulWidget {
 
 class _LearningPageState extends State<LearningPage> {
   late Future<List<Chapter>> futureChapters;
+  String _difficultyFilter = 'all';
 
   @override
   void initState() {
@@ -39,12 +40,31 @@ class _LearningPageState extends State<LearningPage> {
               return const Center(child: Text('학습 가능한 챕터가 없습니다.'));
             }
 
+            final allChapters = snapshot.data!;
+            final chapters = _difficultyFilter == 'all'
+                ? allChapters
+                : allChapters
+                    .where((c) => c.difficulty == _difficultyFilter)
+                    .toList();
+
             return ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-              itemCount: snapshot.data!.length,
+              itemCount: chapters.length + 1,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
-                final chapter = snapshot.data![index];
+                if (index == 0) {
+                  return Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _filterChip('전체', 'all'),
+                      _filterChip('초급', 'beginner'),
+                      _filterChip('중급', 'intermediate'),
+                      _filterChip('고급', 'advanced'),
+                    ],
+                  );
+                }
+                final chapter = chapters[index - 1];
                 final colorScheme = Theme.of(context).colorScheme;
                 return Card(
                   child: Padding(
@@ -61,7 +81,7 @@ class _LearningPageState extends State<LearningPage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${chapter.title} 주제로 학습을 진행합니다.',
+                          '${chapter.title} 주제로 학습을 진행합니다. (${chapter.difficulty}/${chapter.contextTag})',
                           style:
                               Theme.of(context).textTheme.bodyMedium?.copyWith(
                                     color: colorScheme.onSurfaceVariant,
@@ -119,6 +139,18 @@ class _LearningPageState extends State<LearningPage> {
           },
         ),
       ),
+    );
+  }
+
+  Widget _filterChip(String label, String value) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: _difficultyFilter == value,
+      onSelected: (_) {
+        setState(() {
+          _difficultyFilter = value;
+        });
+      },
     );
   }
 }

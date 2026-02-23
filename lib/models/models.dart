@@ -318,3 +318,55 @@ class PronunciationEvaluationResult {
     );
   }
 }
+
+class ReviewQueueItem {
+  final int sentenceId;
+  final int chapterId;
+  final String chapterTitle;
+  final String difficulty;
+  final String contextTag;
+  final String koreanSentence;
+  final String northKoreanSentence;
+  final double sentenceAccuracyRatio;
+  final double? lastScorePercent;
+  final double? recentAvgScorePercent;
+  final double priorityScore;
+  final String reason;
+
+  ReviewQueueItem({
+    required this.sentenceId,
+    required this.chapterId,
+    required this.chapterTitle,
+    required this.difficulty,
+    required this.contextTag,
+    required this.koreanSentence,
+    required this.northKoreanSentence,
+    required this.sentenceAccuracyRatio,
+    required this.lastScorePercent,
+    required this.recentAvgScorePercent,
+    required this.priorityScore,
+    required this.reason,
+  });
+
+  factory ReviewQueueItem.fromJson(Map<String, dynamic> json) {
+    return ReviewQueueItem(
+      sentenceId: (json['sentence_id'] as num).toInt(),
+      chapterId: (json['chapter_id'] as num).toInt(),
+      chapterTitle: (json['chapter_title'] ?? '').toString(),
+      difficulty: (json['difficulty'] ?? 'beginner').toString(),
+      contextTag: (json['context_tag'] ?? 'daily').toString(),
+      koreanSentence: (json['korean_sentence'] ?? '').toString(),
+      northKoreanSentence: (json['north_korean_sentence'] ?? '').toString(),
+      sentenceAccuracyRatio:
+          ((json['sentence_accuracy_ratio'] ?? 0) as num).toDouble(),
+      lastScorePercent: json['last_score_percent'] == null
+          ? null
+          : (json['last_score_percent'] as num).toDouble(),
+      recentAvgScorePercent: json['recent_avg_score_percent'] == null
+          ? null
+          : (json['recent_avg_score_percent'] as num).toDouble(),
+      priorityScore: ((json['priority_score'] ?? 0) as num).toDouble(),
+      reason: (json['reason'] ?? '').toString(),
+    );
+  }
+}
