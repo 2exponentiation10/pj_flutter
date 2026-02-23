@@ -500,7 +500,9 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       return '마이크는 HTTPS에서만 동작합니다. https 주소로 다시 접속해 주세요.';
     }
     if (raw.contains('notallowed') || raw.contains('permission')) {
-      return '마이크 권한이 거부되었습니다. 브라우저 사이트 설정에서 마이크를 허용해 주세요.';
+      return isLikelySafari
+          ? '마이크 권한이 거부되었습니다. iOS 설정 > Safari > 마이크 또는 주소창 aA > 웹 사이트 설정에서 마이크를 허용해 주세요.'
+          : '마이크 권한이 거부되었습니다. 브라우저 사이트 설정에서 마이크를 허용해 주세요.';
     }
     if (raw.contains('notfound')) {
       return '사용 가능한 마이크를 찾지 못했습니다. 기기 마이크 연결 상태를 확인해 주세요.';

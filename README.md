@@ -14,3 +14,8 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+
+## iOS release
+
+- Guide: `/Users/LSY/dev/깃헙/pj_flutter/IOS_RELEASE.md`
+- Preflight script: `/Users/LSY/dev/깃헙/pj_flutter/scripts/ios_release_prep.sh`
