@@ -12,15 +12,17 @@ import 'review_queue_page.dart';
 import 'settings_page.dart';
 
 class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
   @override
-  _HomePageState createState() => _HomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
 
   static final List<Widget> _widgetOptions = <Widget>[
-    HomeContent(),
+    const HomeContent(),
     LibraryPage(),
     ProgressPage(),
     SettingsPage(),
@@ -38,7 +40,7 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(title: Text(titles[_selectedIndex])),
-      body: GradientPage(child: _widgetOptions.elementAt(_selectedIndex)),
+      body: AppShell(child: _widgetOptions.elementAt(_selectedIndex)),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: '홈'),
@@ -57,6 +59,8 @@ class _HomePageState extends State<HomePage> {
 }
 
 class HomeContent extends StatelessWidget {
+  const HomeContent({super.key});
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Chapter>(
@@ -73,57 +77,28 @@ class HomeContent extends StatelessWidget {
         }
 
         final chapter = snapshot.data!;
-        final colorScheme = Theme.of(context).colorScheme;
-
         return ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
           children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '다음 학습 챕터',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      chapter.title,
-                      style:
-                          Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '오늘 20분만 투자해서 단어, 문장, 억양을 한 번에 정리해보세요.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                    const SizedBox(height: 14),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => LearningPage()),
-                        );
-                      },
-                      icon: const Icon(Icons.play_arrow_rounded),
-                      label: const Text('바로 학습 시작'),
-                    ),
-                  ],
-                ),
+            HeroIntroCard(
+              eyebrow: '다음 학습 챕터',
+              title: chapter.title,
+              description: '오늘 20분 집중 학습으로 단어, 문장, 억양을 한 번에 정리하세요.',
+              action: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const LearningPage()),
+                  );
+                },
+                icon: const Icon(Icons.play_circle_fill_rounded),
+                label: const Text('바로 학습 시작'),
               ),
             ),
             const SizedBox(height: 14),
-            Row(
-              children: const [
+            const Row(
+              children: [
                 Expanded(
                   child: StatCard(
                     label: '학습한 챕터 수',
@@ -144,7 +119,7 @@ class HomeContent extends StatelessWidget {
             const SizedBox(height: 18),
             const SectionTitle(
               title: '빠른 실행',
-              subtitle: '자주 쓰는 기능으로 바로 이동하세요.',
+              subtitle: '학습, 평가, 복습을 한 번에 연결하세요.',
             ),
             ActionTile(
               title: '학습 모드',
@@ -153,7 +128,8 @@ class HomeContent extends StatelessWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => LearningPage()),
+                  MaterialPageRoute(
+                      builder: (context) => const LearningPage()),
                 );
               },
             ),
@@ -164,7 +140,8 @@ class HomeContent extends StatelessWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => EvaluationPage()),
+                  MaterialPageRoute(
+                      builder: (context) => const EvaluationPage()),
                 );
               },
             ),

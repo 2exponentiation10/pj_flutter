@@ -8,8 +8,10 @@ import 'sentence_learning_page.dart';
 import 'word_learning_page.dart';
 
 class LearningPage extends StatefulWidget {
+  const LearningPage({super.key});
+
   @override
-  _LearningPageState createState() => _LearningPageState();
+  State<LearningPage> createState() => _LearningPageState();
 }
 
 class _LearningPageState extends State<LearningPage> {
@@ -26,7 +28,7 @@ class _LearningPageState extends State<LearningPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('학습하기')),
-      body: GradientPage(
+      body: AppShell(
         child: FutureBuilder<List<Chapter>>(
           future: futureChapters,
           builder: (context, snapshot) {
@@ -48,27 +50,43 @@ class _LearningPageState extends State<LearningPage> {
                     .toList();
 
             return ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-              itemCount: chapters.length + 1,
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+              itemCount: chapters.length + 2,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 if (index == 0) {
-                  return Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                  return const HeroIntroCard(
+                    eyebrow: 'Learning Mode',
+                    title: '챕터 기반 학습',
+                    description: '난이도와 문맥에 맞춰 단어, 문장, 억양 학습 루틴을 시작하세요.',
+                  );
+                }
+                if (index == 1) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _filterChip('전체', 'all'),
-                      _filterChip('초급', 'beginner'),
-                      _filterChip('중급', 'intermediate'),
-                      _filterChip('고급', 'advanced'),
+                      const SectionTitle(
+                        title: '난이도 필터',
+                        subtitle: '현재 실력에 맞는 챕터만 골라 학습합니다.',
+                      ),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _filterChip('전체', 'all'),
+                          _filterChip('초급', 'beginner'),
+                          _filterChip('중급', 'intermediate'),
+                          _filterChip('고급', 'advanced'),
+                        ],
+                      ),
                     ],
                   );
                 }
-                final chapter = chapters[index - 1];
+                final chapter = chapters[index - 2];
                 final colorScheme = Theme.of(context).colorScheme;
                 return Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -79,7 +97,7 @@ class _LearningPageState extends State<LearningPage> {
                                     fontWeight: FontWeight.w800,
                                   ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         Text(
                           '${chapter.title} 주제로 학습을 진행합니다. (${chapter.difficulty}/${chapter.contextTag})',
                           style:
@@ -87,7 +105,7 @@ class _LearningPageState extends State<LearningPage> {
                                     color: colorScheme.onSurfaceVariant,
                                   ),
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 12),
                         ActionTile(
                           title: '유닛 1. 단어 학습',
                           subtitle: '${chapter.title} 기본 어휘',
@@ -151,6 +169,7 @@ class _LearningPageState extends State<LearningPage> {
           _difficultyFilter = value;
         });
       },
+      showCheckmark: false,
     );
   }
 }

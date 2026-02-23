@@ -8,8 +8,10 @@ import 'evaluation_learning_page.dart';
 import 'evaluation_sentence_page.dart';
 
 class EvaluationPage extends StatefulWidget {
+  const EvaluationPage({super.key});
+
   @override
-  _EvaluationPageState createState() => _EvaluationPageState();
+  State<EvaluationPage> createState() => _EvaluationPageState();
 }
 
 class _EvaluationPageState extends State<EvaluationPage> {
@@ -26,7 +28,7 @@ class _EvaluationPageState extends State<EvaluationPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('평가하기')),
-      body: GradientPage(
+      body: AppShell(
         child: FutureBuilder<List<Chapter>>(
           future: futureChapters,
           builder: (context, snapshot) {
@@ -48,27 +50,43 @@ class _EvaluationPageState extends State<EvaluationPage> {
                     .toList();
 
             return ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-              itemCount: chapters.length + 1,
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+              itemCount: chapters.length + 2,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 if (index == 0) {
-                  return Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                  return const HeroIntroCard(
+                    eyebrow: 'Evaluation Mode',
+                    title: '실전 말하기 평가',
+                    description: '단어, 문장, 억양 점검으로 현재 발화 품질과 개선 지점을 확인하세요.',
+                  );
+                }
+                if (index == 1) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _filterChip('전체', 'all'),
-                      _filterChip('초급', 'beginner'),
-                      _filterChip('중급', 'intermediate'),
-                      _filterChip('고급', 'advanced'),
+                      const SectionTitle(
+                        title: '난이도 필터',
+                        subtitle: '현재 학습 단계에 맞는 평가만 빠르게 선택합니다.',
+                      ),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _filterChip('전체', 'all'),
+                          _filterChip('초급', 'beginner'),
+                          _filterChip('중급', 'intermediate'),
+                          _filterChip('고급', 'advanced'),
+                        ],
+                      ),
                     ],
                   );
                 }
-                final chapter = chapters[index - 1];
+                final chapter = chapters[index - 2];
                 final colorScheme = Theme.of(context).colorScheme;
                 return Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -79,7 +97,7 @@ class _EvaluationPageState extends State<EvaluationPage> {
                                     fontWeight: FontWeight.w800,
                                   ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         Text(
                           '${chapter.title} 학습 결과를 점검합니다. (${chapter.difficulty}/${chapter.contextTag})',
                           style:
@@ -87,7 +105,7 @@ class _EvaluationPageState extends State<EvaluationPage> {
                                     color: colorScheme.onSurfaceVariant,
                                   ),
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 12),
                         ActionTile(
                           title: '유닛 1. 단어 평가',
                           subtitle: '어휘 이해도 체크',
@@ -151,6 +169,7 @@ class _EvaluationPageState extends State<EvaluationPage> {
           _difficultyFilter = value;
         });
       },
+      showCheckmark: false,
     );
   }
 }

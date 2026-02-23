@@ -25,7 +25,7 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('복습 추천 큐')),
-      body: GradientPage(
+      body: AppShell(
         child: FutureBuilder<List<ReviewQueueItem>>(
           future: _futureQueue,
           builder: (context, snapshot) {
@@ -41,14 +41,22 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
             }
 
             return ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-              itemCount: items.length,
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+              itemCount: items.length + 1,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
-                final item = items[index];
+                if (index == 0) {
+                  return const HeroIntroCard(
+                    eyebrow: 'Review Queue',
+                    title: '개인화 복습 추천',
+                    description: '최근 발음 평가 이력을 기반으로 우선 복습해야 할 문장을 자동 정렬합니다.',
+                  );
+                }
+
+                final item = items[index - 1];
                 return Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -56,7 +64,7 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
                           '우선순위 ${item.priorityScore.toStringAsFixed(1)} · 챕터 ${item.chapterId}',
                           style: Theme.of(context).textTheme.labelMedium,
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         Text(
                           item.koreanSentence,
                           style:
@@ -69,7 +77,7 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
                           ': ${item.northKoreanSentence}',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 10),
                         Text(
                           '난이도 ${item.difficulty} / 상황 ${item.contextTag}',
                           style: Theme.of(context).textTheme.bodySmall,
@@ -78,9 +86,9 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
                           '최근평균 ${item.recentAvgScorePercent?.toStringAsFixed(1) ?? '-'} / 마지막 ${item.lastScorePercent?.toStringAsFixed(1) ?? '-'}',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         Text(item.reason),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 12),
                         Align(
                           alignment: Alignment.centerRight,
                           child: ElevatedButton.icon(
