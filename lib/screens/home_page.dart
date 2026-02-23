@@ -23,6 +23,7 @@ class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
   int _logoTapCount = 0;
   DateTime? _lastLogoTapAt;
+  static const String _defaultAdminPin = '1004';
 
   static final List<Widget> _widgetOptions = <Widget>[
     const HomeContent(),
@@ -65,7 +66,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildAppBarTitle(String title) {
     if (_selectedIndex != 0) return Text(title);
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         final now = DateTime.now();
         if (_lastLogoTapAt == null ||
             now.difference(_lastLogoTapAt!) > const Duration(seconds: 3)) {
@@ -75,10 +76,10 @@ class _HomePageState extends State<HomePage> {
         _logoTapCount += 1;
         if (_logoTapCount >= 10) {
           _logoTapCount = 0;
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AdminConsolePage()),
-          );
+          final ok = await _verifyAdminPin();
+          if (!mounted || !ok) return;
+          Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const AdminConsolePage()));
           return;
         }
         if (_logoTapCount >= 7) {
@@ -97,6 +98,77 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+  }
+
+  Future<bool> _verifyAdminPin() async {
+    final configuredPin = const String.fromEnvironment(
+      'ADMIN_CONSOLE_PIN',
+      defaultValue: _defaultAdminPin,
+    );
+    final controller = TextEditingController();
+    String? errorText;
+
+    final unlocked = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => StatefulBuilder(
+            builder: (context, setStateDialog) => AlertDialog(
+              title: const Text('관리자 인증'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('관리자 PIN을 입력하세요.'),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: controller,
+                    keyboardType: TextInputType.number,
+                    obscureText: true,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: 'PIN',
+                      errorText: errorText,
+                    ),
+                    onSubmitted: (_) {
+                      if (controller.text.trim() == configuredPin) {
+                        Navigator.pop(context, true);
+                      } else {
+                        setStateDialog(() {
+                          errorText = 'PIN이 올바르지 않습니다.';
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('취소'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    if (controller.text.trim() == configuredPin) {
+                      Navigator.pop(context, true);
+                    } else {
+                      setStateDialog(() {
+                        errorText = 'PIN이 올바르지 않습니다.';
+                      });
+                    }
+                  },
+                  child: const Text('확인'),
+                ),
+              ],
+            ),
+          ),
+        ) ??
+        false;
+
+    if (!unlocked && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('관리자 인증에 실패했습니다.')),
+      );
+    }
+    return unlocked;
   }
 }
 
