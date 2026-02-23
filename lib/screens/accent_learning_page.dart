@@ -673,6 +673,10 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                       Text(
                         '최고 점수: ${result.sentenceBestScore!.toStringAsFixed(2)}%',
                       ),
+                    if (result.recentAvgScore != null)
+                      Text(
+                        '최근 ${result.recentWindowSize ?? 3}회 평균: ${result.recentAvgScore!.toStringAsFixed(2)}% (편차 ${(result.recentScoreStddev ?? 0).toStringAsFixed(2)})',
+                      ),
                     if (result.referencePitchCurve.isNotEmpty &&
                         result.userPitchCurve.isNotEmpty) ...[
                       const SizedBox(height: 10),
@@ -810,6 +814,10 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                             Text(
                               '#${chapter.id} #${chapter.title}',
                               style: const TextStyle(fontSize: 14),
+                            ),
+                            Text(
+                              '난이도: ${chapter.difficulty} / 상황: ${chapter.contextTag}',
+                              style: const TextStyle(fontSize: 12),
                             ),
                             if (!kIsWeb && !speechRecognitionSupported) ...[
                               const SizedBox(height: 8),

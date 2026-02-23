@@ -2,15 +2,24 @@
 class Chapter {
   final int id; // 챕터의 고유 식별자입니다.
   final String title; // 챕터의 제목입니다.
+  final String difficulty; // 난이도 태그입니다.
+  final String contextTag; // 상황 태그입니다.
 
   // Chapter 객체를 초기화하는 생성자입니다.
-  Chapter({required this.id, required this.title});
+  Chapter({
+    required this.id,
+    required this.title,
+    this.difficulty = 'beginner',
+    this.contextTag = 'daily',
+  });
 
   // JSON으로부터 Chapter 객체를 생성하는 팩토리 메서드입니다.
   factory Chapter.fromJson(Map<String, dynamic> json) {
     return Chapter(
       id: json['id'],
       title: json['title'],
+      difficulty: (json['difficulty'] ?? 'beginner').toString(),
+      contextTag: (json['context_tag'] ?? 'daily').toString(),
     );
   }
 }
@@ -173,6 +182,13 @@ class PronunciationEvaluationResult {
   final int? attemptId;
   final int? sentenceAttemptsCount;
   final double? sentenceBestScore;
+  final int? recentWindowSize;
+  final List<double> recentAttemptScores;
+  final double? recentAvgScore;
+  final double? recentScoreStddev;
+  final double? recentAvgPitchScore;
+  final double? recentAvgSpeedScore;
+  final double? recentAvgVolumeScore;
 
   PronunciationEvaluationResult({
     required this.transcript,
@@ -204,6 +220,13 @@ class PronunciationEvaluationResult {
     this.attemptId,
     this.sentenceAttemptsCount,
     this.sentenceBestScore,
+    this.recentWindowSize,
+    this.recentAttemptScores = const [],
+    this.recentAvgScore,
+    this.recentScoreStddev,
+    this.recentAvgPitchScore,
+    this.recentAvgSpeedScore,
+    this.recentAvgVolumeScore,
   });
 
   static List<double> _toDoubleList(dynamic value) {
@@ -273,6 +296,25 @@ class PronunciationEvaluationResult {
       sentenceBestScore: json['sentence_best_score'] == null
           ? null
           : (json['sentence_best_score'] as num).toDouble(),
+      recentWindowSize: json['recent_window_size'] == null
+          ? null
+          : (json['recent_window_size'] as num).toInt(),
+      recentAttemptScores: _toDoubleList(json['recent_attempt_scores']),
+      recentAvgScore: json['recent_avg_score'] == null
+          ? null
+          : (json['recent_avg_score'] as num).toDouble(),
+      recentScoreStddev: json['recent_score_stddev'] == null
+          ? null
+          : (json['recent_score_stddev'] as num).toDouble(),
+      recentAvgPitchScore: json['recent_avg_pitch_score'] == null
+          ? null
+          : (json['recent_avg_pitch_score'] as num).toDouble(),
+      recentAvgSpeedScore: json['recent_avg_speed_score'] == null
+          ? null
+          : (json['recent_avg_speed_score'] as num).toDouble(),
+      recentAvgVolumeScore: json['recent_avg_volume_score'] == null
+          ? null
+          : (json['recent_avg_volume_score'] as num).toDouble(),
     );
   }
 }
