@@ -10,6 +10,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/browser_capability.dart';
 import '../services/live_audio_analyzer.dart';
 import '../widgets/voice_curve_compare_chart.dart';
 import 'accent_evaluation_result_page.dart';
@@ -52,6 +53,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   bool _webHasSpeech = false;
   DateTime? _webSpeechStartedAt;
   DateTime? _webLastVoiceAt;
+  String? _webMicInitError;
 
   List<AppSentence> sentences = [];
 
@@ -127,7 +129,11 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
     if (kIsWeb) {
       await _startWebMicRecordingIfPossible();
       if (_webMicRecorder == null) {
-        _showErrorDialog('마이크 녹음을 시작할 수 없습니다. 브라우저 권한을 확인해 주세요.');
+        final message = _buildWebMicInitErrorMessage();
+        setState(() {
+          listeningStatusText = message;
+        });
+        _showErrorDialog(message);
         return;
       }
 
@@ -146,6 +152,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
         _webHasSpeech = false;
         _webSpeechStartedAt = null;
         _webLastVoiceAt = null;
+        _webMicInitError = null;
       });
       await _startLiveAudioAnalyzerIfPossible();
       _webAutoStopTimer?.cancel();
@@ -334,10 +341,41 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
       await recorder.start();
       _webMicRecorder = recorder;
       _webAudioBytes = null;
-    } catch (_) {
+      _webMicInitError = null;
+    } catch (e) {
       _webMicRecorder = null;
       _webAudioBytes = null;
+      _webMicInitError = e.toString();
     }
+  }
+
+  String _buildWebMicInitErrorMessage() {
+    final raw = (_webMicInitError ?? '').toLowerCase();
+    final isHttpsLike = Uri.base.scheme == 'https' ||
+        Uri.base.host == 'localhost' ||
+        Uri.base.host == '127.0.0.1';
+    if (!isHttpsLike) {
+      return '마이크는 HTTPS에서만 동작합니다. https 주소로 다시 접속해 주세요.';
+    }
+    if (raw.contains('notallowed') || raw.contains('permission')) {
+      return '마이크 권한이 거부되었습니다. 브라우저 사이트 설정에서 마이크를 허용해 주세요.';
+    }
+    if (raw.contains('notfound')) {
+      return '사용 가능한 마이크를 찾지 못했습니다. 기기 마이크 연결 상태를 확인해 주세요.';
+    }
+    if (raw.contains('notreadable') ||
+        raw.contains('trackstart') ||
+        raw.contains('abort')) {
+      return '다른 앱이 마이크를 사용 중입니다. 통화/녹음 앱을 종료하고 다시 시도해 주세요.';
+    }
+    if (raw.contains('notsupported') ||
+        raw.contains('mediarecorder') ||
+        raw.contains('unsupported')) {
+      return isLikelySafari
+          ? '현재 Safari 환경에서 녹음 초기화에 실패했습니다. 인앱 브라우저가 아닌 Safari에서 열고 마이크 권한을 허용해 주세요.'
+          : '현재 브라우저에서 녹음 기능을 지원하지 않습니다. 최신 Safari/Chrome으로 다시 시도해 주세요.';
+    }
+    return '마이크 초기화에 실패했습니다. 권한 허용 후 새로고침해서 다시 시도해 주세요.';
   }
 
   Future<void> _stopWebMicRecordingIfPossible() async {
