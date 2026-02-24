@@ -559,10 +559,16 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
                 ListTile(
                   leading: const Icon(Icons.mic_rounded),
                   title: const Text('녹음 시작(브라우저)'),
-                  subtitle: const Text('iPhone 음성메모/갤럭시 녹음기로 연결될 수 있습니다.'),
+                  subtitle: Text(
+                    isLikelySafari
+                        ? 'iOS는 파일 선택 경로를 권장합니다. 필요시 녹음 선택창이 열립니다.'
+                        : '기기 녹음 앱 선택창으로 연결될 수 있습니다.',
+                  ),
                   onTap: () async {
                     Navigator.pop(context);
-                    final captured = await captureAudioFromBrowser();
+                    final captured = await captureAudioFromBrowser(
+                      preferMicrophone: !isLikelySafari,
+                    );
                     if (captured == null || captured.bytes.isEmpty) return;
                     await _evaluateRecognizedText(
                       audioBytes: captured.bytes,

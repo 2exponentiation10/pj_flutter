@@ -4,10 +4,14 @@ import 'dart:typed_data';
 
 import 'web_audio_capture_stub.dart';
 
-Future<CapturedAudio?> captureAudioFromBrowser() async {
+Future<CapturedAudio?> captureAudioFromBrowser({
+  bool preferMicrophone = false,
+}) async {
   final input = html.FileUploadInputElement();
-  input.accept = 'audio/*';
-  input.setAttribute('capture', 'microphone');
+  input.accept = 'audio/*,.m4a,.mp3,.wav,.ogg,.aac,.flac,.webm';
+  if (preferMicrophone) {
+    input.setAttribute('capture', 'microphone');
+  }
 
   final completer = Completer<CapturedAudio?>();
 

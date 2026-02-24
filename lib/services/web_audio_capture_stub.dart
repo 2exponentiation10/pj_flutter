@@ -12,6 +12,8 @@ class CapturedAudio {
   });
 }
 
-Future<CapturedAudio?> captureAudioFromBrowser() async {
+Future<CapturedAudio?> captureAudioFromBrowser({
+  bool preferMicrophone = false,
+}) async {
   return null;
 }
