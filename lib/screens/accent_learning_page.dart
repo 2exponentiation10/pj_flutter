@@ -843,8 +843,8 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
 
               return Stack(
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                  ListView(
+                    padding: EdgeInsets.zero,
                     children: [
                       Padding(
                         padding: const EdgeInsets.all(16),
@@ -985,137 +985,146 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                           ],
                         ),
                       ),
-                      const Expanded(child: SizedBox()),
+                      const SizedBox(height: 8),
                       Padding(
                         padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            ElevatedButton(
-                              onPressed: () {
-                                if (currentSentence.isCorrect) {
-                                  setState(
-                                      () => currentSentence.isCorrect = false);
-                                } else {
-                                  _saveSentence(currentSentence.id);
-                                }
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: currentSentence.isCorrect
-                                    ? Colors.black
-                                    : Colors.white,
-                                foregroundColor: currentSentence.isCorrect
-                                    ? Colors.white
-                                    : Colors.black,
-                                minimumSize: const Size(double.infinity, 50),
-                                side: currentSentence.isCorrect
-                                    ? null
-                                    : const BorderSide(color: Colors.black),
-                              ),
-                              child: Text(
-                                currentSentence.isCorrect ? '저장됨' : '저장하기',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            if (currentIndex > 0)
+                        child: SafeArea(
+                          top: false,
+                          child: Column(
+                            children: [
                               ElevatedButton(
-                                onPressed: () => setState(() => currentIndex--),
+                                onPressed: () {
+                                  if (currentSentence.isCorrect) {
+                                    setState(() =>
+                                        currentSentence.isCorrect = false);
+                                  } else {
+                                    _saveSentence(currentSentence.id);
+                                  }
+                                },
                                 style: ElevatedButton.styleFrom(
-                                  foregroundColor: Colors.black,
-                                  backgroundColor: Colors.white,
+                                  backgroundColor: currentSentence.isCorrect
+                                      ? Colors.black
+                                      : Colors.white,
+                                  foregroundColor: currentSentence.isCorrect
+                                      ? Colors.white
+                                      : Colors.black,
                                   minimumSize: const Size(double.infinity, 50),
-                                  side: const BorderSide(color: Colors.black),
+                                  side: currentSentence.isCorrect
+                                      ? null
+                                      : const BorderSide(color: Colors.black),
                                 ),
-                                child: const Text(
-                                  '이전',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                child: Text(
+                                  currentSentence.isCorrect ? '저장됨' : '저장하기',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold),
                                 ),
                               ),
-                            const SizedBox(height: 10),
-                            if (currentIndex < sentences.length - 1)
-                              ElevatedButton(
-                                onPressed: () => _nextSentence(sentences),
-                                style: ElevatedButton.styleFrom(
-                                  foregroundColor: Colors.black,
-                                  backgroundColor: Colors.white,
-                                  minimumSize: const Size(double.infinity, 50),
-                                  side: const BorderSide(color: Colors.black),
+                              const SizedBox(height: 10),
+                              if (currentIndex > 0)
+                                ElevatedButton(
+                                  onPressed: () =>
+                                      setState(() => currentIndex--),
+                                  style: ElevatedButton.styleFrom(
+                                    foregroundColor: Colors.black,
+                                    backgroundColor: Colors.white,
+                                    minimumSize:
+                                        const Size(double.infinity, 50),
+                                    side: const BorderSide(color: Colors.black),
+                                  ),
+                                  child: const Text(
+                                    '이전',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold),
+                                  ),
                                 ),
-                                child: const Text(
-                                  '다음',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
+                              const SizedBox(height: 10),
+                              if (currentIndex < sentences.length - 1)
+                                ElevatedButton(
+                                  onPressed: () => _nextSentence(sentences),
+                                  style: ElevatedButton.styleFrom(
+                                    foregroundColor: Colors.black,
+                                    backgroundColor: Colors.white,
+                                    minimumSize:
+                                        const Size(double.infinity, 50),
+                                    side: const BorderSide(color: Colors.black),
+                                  ),
+                                  child: const Text(
+                                    '다음',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold),
+                                  ),
                                 ),
-                              ),
-                            if (currentIndex == sentences.length - 1)
+                              if (currentIndex == sentences.length - 1)
+                                ElevatedButton(
+                                  onPressed: _completeLearning,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.black,
+                                    minimumSize:
+                                        const Size(double.infinity, 50),
+                                  ),
+                                  child: const Text(
+                                    '완료하기',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              const SizedBox(height: 10),
                               ElevatedButton(
-                                onPressed: _completeLearning,
+                                onPressed: () => _playTextToSpeech(
+                                  currentSentence.koreanSentence,
+                                ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.black,
                                   minimumSize: const Size(double.infinity, 50),
                                 ),
                                 child: const Text(
-                                  '완료하기',
+                                  '음성 듣기',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
                                 ),
                               ),
-                            const SizedBox(height: 10),
-                            ElevatedButton(
-                              onPressed: () => _playTextToSpeech(
-                                currentSentence.koreanSentence,
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.black,
-                                minimumSize: const Size(double.infinity, 50),
-                              ),
-                              child: const Text(
-                                '음성 듣기',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                              const SizedBox(height: 10),
+                              ElevatedButton(
+                                onPressed:
+                                    (!kIsWeb && !speechRecognitionSupported)
+                                        ? null
+                                        : () => isListening
+                                            ? _stopListening()
+                                            : _startListening(),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.black,
+                                  minimumSize: const Size(double.infinity, 50),
+                                ),
+                                child: Text(
+                                  isListening ? '듣기 중지하기' : '직접 말하기',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 10),
-                            ElevatedButton(
-                              onPressed:
-                                  (!kIsWeb && !speechRecognitionSupported)
-                                      ? null
-                                      : () => isListening
-                                          ? _stopListening()
-                                          : _startListening(),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.black,
-                                minimumSize: const Size(double.infinity, 50),
-                              ),
-                              child: Text(
-                                isListening ? '듣기 중지하기' : '직접 말하기',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                              const SizedBox(height: 10),
+                              OutlinedButton.icon(
+                                onPressed: _isFinalizing || isEvaluatingAudio
+                                    ? null
+                                    : _uploadAudioAndEvaluate,
+                                icon: const Icon(Icons.upload_file_rounded),
+                                label: const Text('음성 파일 업로드(임시)'),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(double.infinity, 50),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 10),
-                            OutlinedButton.icon(
-                              onPressed: _isFinalizing || isEvaluatingAudio
-                                  ? null
-                                  : _uploadAudioAndEvaluate,
-                              icon: const Icon(Icons.upload_file_rounded),
-                              label: const Text('음성 파일 업로드(임시)'),
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size(double.infinity, 50),
-                              ),
-                            ),
-                            if (_isFinalizing || isEvaluatingAudio)
-                              const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 8),
-                                child: LinearProgressIndicator(minHeight: 2),
-                              ),
-                          ],
+                              if (_isFinalizing || isEvaluatingAudio)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: LinearProgressIndicator(minHeight: 2),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ],

@@ -730,8 +730,8 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
 
               return Stack(
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                  ListView(
+                    padding: EdgeInsets.zero,
                     children: [
                       Padding(
                         padding: const EdgeInsets.all(16),
@@ -849,85 +849,91 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
                           ],
                         ),
                       ),
-                      const Spacer(),
+                      const SizedBox(height: 8),
                       Padding(
                         padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            ElevatedButton(
-                              onPressed:
-                                  (!kIsWeb && !speechRecognitionSupported)
-                                      ? null
-                                      : () => isListening
-                                          ? _stopListening()
-                                          : _startListening(),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.black,
-                                minimumSize: const Size(double.infinity, 50),
-                              ),
-                              child: Text(
-                                isListening ? '듣기 중지하기' : '직접 말하기',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            OutlinedButton.icon(
-                              onPressed: _isFinalizing || isEvaluatingAudio
-                                  ? null
-                                  : _uploadAudioAndEvaluate,
-                              icon: const Icon(Icons.upload_file_rounded),
-                              label: const Text('음성 파일 업로드(임시)'),
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size(double.infinity, 50),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            if (_isFinalizing || isEvaluatingAudio)
-                              const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 8),
-                                child: LinearProgressIndicator(minHeight: 2),
-                              ),
-                            if (currentIndex > 0)
+                        child: SafeArea(
+                          top: false,
+                          child: Column(
+                            children: [
                               ElevatedButton(
-                                onPressed: _prevSentence,
-                                style: ElevatedButton.styleFrom(
-                                  foregroundColor: Colors.black,
-                                  backgroundColor: Colors.white,
-                                  minimumSize: const Size(double.infinity, 50),
-                                  side: const BorderSide(color: Colors.black),
-                                ),
-                                child: const Text('이전',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold)),
-                              ),
-                            if (currentIndex < sentences.length - 1)
-                              ElevatedButton(
-                                onPressed: _nextSentence,
-                                style: ElevatedButton.styleFrom(
-                                  foregroundColor: Colors.black,
-                                  backgroundColor: Colors.white,
-                                  minimumSize: const Size(double.infinity, 50),
-                                  side: const BorderSide(color: Colors.black),
-                                ),
-                                child: const Text('다음',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold)),
-                              ),
-                            if (currentIndex == sentences.length - 1)
-                              ElevatedButton(
-                                onPressed: _completeEvaluation,
+                                onPressed:
+                                    (!kIsWeb && !speechRecognitionSupported)
+                                        ? null
+                                        : () => isListening
+                                            ? _stopListening()
+                                            : _startListening(),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.black,
                                   minimumSize: const Size(double.infinity, 50),
                                 ),
-                                child: const Text('평가 완료',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white)),
+                                child: Text(
+                                  isListening ? '듣기 중지하기' : '직접 말하기',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white),
+                                ),
                               ),
-                          ],
+                              const SizedBox(height: 10),
+                              OutlinedButton.icon(
+                                onPressed: _isFinalizing || isEvaluatingAudio
+                                    ? null
+                                    : _uploadAudioAndEvaluate,
+                                icon: const Icon(Icons.upload_file_rounded),
+                                label: const Text('음성 파일 업로드(임시)'),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(double.infinity, 50),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              if (_isFinalizing || isEvaluatingAudio)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: LinearProgressIndicator(minHeight: 2),
+                                ),
+                              if (currentIndex > 0)
+                                ElevatedButton(
+                                  onPressed: _prevSentence,
+                                  style: ElevatedButton.styleFrom(
+                                    foregroundColor: Colors.black,
+                                    backgroundColor: Colors.white,
+                                    minimumSize:
+                                        const Size(double.infinity, 50),
+                                    side: const BorderSide(color: Colors.black),
+                                  ),
+                                  child: const Text('이전',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                              if (currentIndex < sentences.length - 1)
+                                ElevatedButton(
+                                  onPressed: _nextSentence,
+                                  style: ElevatedButton.styleFrom(
+                                    foregroundColor: Colors.black,
+                                    backgroundColor: Colors.white,
+                                    minimumSize:
+                                        const Size(double.infinity, 50),
+                                    side: const BorderSide(color: Colors.black),
+                                  ),
+                                  child: const Text('다음',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                              if (currentIndex == sentences.length - 1)
+                                ElevatedButton(
+                                  onPressed: _completeEvaluation,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.black,
+                                    minimumSize:
+                                        const Size(double.infinity, 50),
+                                  ),
+                                  child: const Text('평가 완료',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white)),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
