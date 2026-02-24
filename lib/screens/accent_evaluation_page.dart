@@ -6,7 +6,6 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:microphone/microphone.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
@@ -15,6 +14,7 @@ import '../services/api_service.dart';
 import '../services/browser_capability.dart';
 import '../services/live_audio_analyzer.dart';
 import '../services/web_audio_capture.dart';
+import '../services/web_mic_recorder.dart';
 import '../widgets/voice_curve_compare_chart.dart';
 import 'accent_evaluation_result_page.dart';
 
@@ -42,8 +42,10 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   bool _isFinalizing = false;
   String recognizedText = '';
   String listeningStatusText = '직접 말하기를 눌러 음성 입력을 시작하세요.';
-  MicrophoneRecorder? _webMicRecorder;
+  WebMicRecorder? _webMicRecorder;
   Uint8List? _webAudioBytes;
+  String? _webAudioMimeType;
+  String? _webAudioFileName;
   final List<double> _liveInputCurve = [];
   double _soundLevelMin = 0;
   double _soundLevelMax = 0;
@@ -353,16 +355,19 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   Future<void> _startWebMicRecordingIfPossible() async {
     if (!kIsWeb) return;
     try {
-      _webMicRecorder?.dispose();
-      final recorder = MicrophoneRecorder();
-      await recorder.init();
+      await _webMicRecorder?.dispose();
+      final recorder = createWebMicRecorder();
       await recorder.start();
       _webMicRecorder = recorder;
       _webAudioBytes = null;
+      _webAudioMimeType = null;
+      _webAudioFileName = null;
       _webMicInitError = null;
     } catch (e) {
       _webMicRecorder = null;
       _webAudioBytes = null;
+      _webAudioMimeType = null;
+      _webAudioFileName = null;
       _webMicInitError = e.toString();
     }
   }
@@ -401,12 +406,16 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   Future<void> _stopWebMicRecordingIfPossible() async {
     if (!kIsWeb || _webMicRecorder == null) return;
     try {
-      await _webMicRecorder!.stop();
-      _webAudioBytes = await _webMicRecorder!.toBytes();
+      final result = await _webMicRecorder!.stop();
+      _webAudioBytes = result?.bytes;
+      _webAudioMimeType = result?.mimeType;
+      _webAudioFileName = result?.fileName;
     } catch (_) {
       _webAudioBytes = null;
+      _webAudioMimeType = null;
+      _webAudioFileName = null;
     } finally {
-      _webMicRecorder?.dispose();
+      await _webMicRecorder?.dispose();
       _webMicRecorder = null;
     }
   }
@@ -420,7 +429,11 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
       }
       await _stopLiveAudioAnalyzerIfPossible();
       await _stopWebMicRecordingIfPossible();
-      await _evaluateRecognizedText(audioBytes: _webAudioBytes);
+      await _evaluateRecognizedText(
+        audioBytes: _webAudioBytes,
+        overrideContentType: _webAudioMimeType,
+        overrideFileName: _webAudioFileName,
+      );
     } finally {
       if (mounted) {
         setState(() => isEvaluatingAudio = false);
