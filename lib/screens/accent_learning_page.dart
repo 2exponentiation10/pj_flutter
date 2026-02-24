@@ -70,6 +70,8 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   DateTime? _webSpeechStartedAt;
   DateTime? _webLastVoiceAt;
   String? _webMicInitError;
+  AudioWebDiagnostics? _audioDiagnostics;
+  bool _diagnosticsLoading = false;
 
   int playCount = 0;
 
@@ -85,6 +87,19 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     if (kIsWeb) {
       speechRecognitionSupported = true;
       listeningStatusText = '직접 말하기를 눌러 음성 입력을 시작하세요.';
+      _loadAudioDiagnostics();
+    }
+  }
+
+  Future<void> _loadAudioDiagnostics() async {
+    if (!kIsWeb) return;
+    setState(() => _diagnosticsLoading = true);
+    try {
+      final diagnostics = await getAudioWebDiagnostics();
+      if (!mounted) return;
+      setState(() => _audioDiagnostics = diagnostics);
+    } finally {
+      if (mounted) setState(() => _diagnosticsLoading = false);
     }
   }
 
@@ -1041,6 +1056,63 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                 ],
                               ),
                             ),
+                            if (kIsWeb) ...[
+                              const SizedBox(height: 10),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFFD9DEEA),
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Text(
+                                          '웹 오디오 진단',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        TextButton(
+                                          onPressed: _diagnosticsLoading
+                                              ? null
+                                              : _loadAudioDiagnostics,
+                                          child: const Text('새로고침'),
+                                        ),
+                                      ],
+                                    ),
+                                    if (_diagnosticsLoading)
+                                      const Padding(
+                                        padding:
+                                            EdgeInsets.symmetric(vertical: 6),
+                                        child: LinearProgressIndicator(
+                                          minHeight: 2,
+                                        ),
+                                      ),
+                                    Text(
+                                      _audioDiagnostics == null
+                                          ? '진단 데이터 없음'
+                                          : '권한=${_audioDiagnostics!.micPermissionState} / getUserMedia=${_audioDiagnostics!.hasGetUserMedia} / recorder=${_audioDiagnostics!.hasMediaRecorder}',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _audioDiagnostics == null
+                                          ? ''
+                                          : 'mime(mp4/webm/ogg)= ${_audioDiagnostics!.supportsAudioMp4}/${_audioDiagnostics!.supportsAudioWebm}/${_audioDiagnostics!.supportsAudioOgg} · safari=${_audioDiagnostics!.isSafari}',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
