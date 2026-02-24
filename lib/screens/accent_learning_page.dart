@@ -23,6 +23,7 @@ import '../services/api_service.dart';
 import '../services/browser_capability.dart';
 import '../services/live_audio_analyzer.dart';
 import '../services/tts_service.dart';
+import '../services/web_audio_capture.dart';
 import '../widgets/custom_widgets.dart';
 import '../widgets/voice_curve_compare_chart.dart';
 import 'accent_learning_result_page.dart';
@@ -668,6 +669,58 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     }
   }
 
+  Future<void> _showAudioUploadOptions() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '음성 업로드 방식 선택',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                '직접 녹음하거나 이미 녹음한 음성 파일을 선택할 수 있어요.',
+              ),
+              const SizedBox(height: 14),
+              if (kIsWeb)
+                ListTile(
+                  leading: const Icon(Icons.mic_rounded),
+                  title: const Text('녹음 시작(브라우저)'),
+                  subtitle: const Text('iPhone 음성메모/갤럭시 녹음기로 연결될 수 있습니다.'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final captured = await captureAudioFromBrowser();
+                    if (captured == null || captured.bytes.isEmpty) return;
+                    await _evaluateSpeech(
+                      audioBytes: captured.bytes,
+                      overrideContentType: captured.mimeType,
+                      overrideFileName: captured.fileName,
+                    );
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.folder_open_rounded),
+                title: const Text('파일에서 선택'),
+                subtitle: const Text('m4a/mp3/wav/ogg/webm/aac/flac'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _uploadAudioAndEvaluate();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showEvaluationPopup(PronunciationEvaluationResult result) {
     showDialog(
       context: context,
@@ -1111,7 +1164,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                               OutlinedButton.icon(
                                 onPressed: _isFinalizing || isEvaluatingAudio
                                     ? null
-                                    : _uploadAudioAndEvaluate,
+                                    : _showAudioUploadOptions,
                                 icon: const Icon(Icons.upload_file_rounded),
                                 label: const Text('음성 파일 업로드(임시)'),
                                 style: OutlinedButton.styleFrom(
