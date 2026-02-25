@@ -174,7 +174,9 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
         _webLastVoiceAt = null;
         _webMicInitError = null;
       });
-      await _startLiveAudioAnalyzerIfPossible();
+      if (!isLikelySafari) {
+        await _startLiveAudioAnalyzerIfPossible();
+      }
       _webAutoStopTimer?.cancel();
       _webAutoStopTimer = Timer(const Duration(seconds: 20), () {
         if (mounted && isListening) {
