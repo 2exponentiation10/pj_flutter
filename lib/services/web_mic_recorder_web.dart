@@ -17,6 +17,7 @@ class WebMicRecorder {
   Timer? _statsTimer;
   OnWebMicLiveStats? _onStats;
   int _sampleRate = 48000;
+  final List<Float32List> _pcmFrames = [];
   final List<html.Blob> _chunks = [];
   String _mimeType = 'audio/webm';
   bool _started = false;
@@ -53,6 +54,7 @@ class WebMicRecorder {
     _mediaRecorder = recorder;
 
     _chunks.clear();
+    _pcmFrames.clear();
     final startedCompleter = Completer<void>();
     final errorCompleter = Completer<void>();
 
@@ -163,19 +165,35 @@ class WebMicRecorder {
     _started = false;
     _mediaRecorder = null;
 
-    if (_chunks.isEmpty) return null;
-
     final mimeType =
         _mimeType.isNotEmpty ? _mimeType.toLowerCase() : 'audio/webm';
-    final blob = html.Blob(_chunks, mimeType);
-    final bytes = await _blobToBytes(blob);
+    Uint8List bytes = Uint8List(0);
+    String outMimeType = mimeType;
+    String outFileName = _buildFileName(mimeType);
+
+    if (_chunks.isNotEmpty) {
+      final blob = html.Blob(_chunks, mimeType);
+      bytes = await _blobToBytes(blob);
+    }
     _chunks.clear();
+
+    // Fallback path: if MediaRecorder produced no bytes, synthesize WAV from
+    // captured PCM snapshots so pronunciation evaluation can still proceed.
+    if (bytes.isEmpty) {
+      final wavBytes = _buildWavFromFrames(_pcmFrames, _sampleRate);
+      if (wavBytes.isNotEmpty) {
+        bytes = wavBytes;
+        outMimeType = 'audio/wav';
+        outFileName = 'mic_input.wav';
+      }
+    }
+    _pcmFrames.clear();
     if (bytes.isEmpty) return null;
 
     return WebMicRecordResult(
       bytes: bytes,
-      mimeType: mimeType,
-      fileName: _buildFileName(mimeType),
+      mimeType: outMimeType,
+      fileName: outFileName,
     );
   }
 
@@ -202,6 +220,7 @@ class WebMicRecorder {
       }
       _mediaRecorder = null;
       _chunks.clear();
+      _pcmFrames.clear();
       _started = false;
     }
   }
@@ -250,6 +269,10 @@ class WebMicRecorder {
         final samples = Float32List(2048);
         try {
           js_util.callMethod<void>(node, 'getFloatTimeDomainData', [samples]);
+          _pcmFrames.add(Float32List.fromList(samples));
+          if (_pcmFrames.length > 600) {
+            _pcmFrames.removeAt(0);
+          }
           final level = _computeLevelNorm(samples);
           final pitch = _estimatePitchHz(samples, _sampleRate);
           cb(WebMicLiveStats(levelNorm: level, pitchHz: pitch));
@@ -284,6 +307,54 @@ String _buildFileName(String mimeType) {
   if (mimeType.contains('ogg')) return 'mic_input.ogg';
   if (mimeType.contains('wav')) return 'mic_input.wav';
   return 'mic_input.webm';
+}
+
+Uint8List _buildWavFromFrames(List<Float32List> frames, int sampleRate) {
+  if (frames.isEmpty || sampleRate <= 0) return Uint8List(0);
+  var totalSamples = 0;
+  for (final f in frames) {
+    totalSamples += f.length;
+  }
+  if (totalSamples <= 0) return Uint8List(0);
+
+  final pcm16 = Int16List(totalSamples);
+  var offset = 0;
+  for (final frame in frames) {
+    for (final v in frame) {
+      final clamped = v.clamp(-1.0, 1.0);
+      pcm16[offset++] = (clamped * 32767.0).round().toInt();
+    }
+  }
+
+  final byteData = ByteData(44 + pcm16.length * 2);
+  void writeString(int pos, String s) {
+    for (var i = 0; i < s.length; i++) {
+      byteData.setUint8(pos + i, s.codeUnitAt(i));
+    }
+  }
+
+  writeString(0, 'RIFF');
+  byteData.setUint32(4, 36 + pcm16.length * 2, Endian.little);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  byteData.setUint32(16, 16, Endian.little);
+  byteData.setUint16(20, 1, Endian.little); // PCM
+  byteData.setUint16(22, 1, Endian.little); // mono
+  byteData.setUint32(24, sampleRate, Endian.little);
+  byteData.setUint32(28, sampleRate * 2, Endian.little); // byte rate
+  byteData.setUint16(32, 2, Endian.little); // block align
+  byteData.setUint16(34, 16, Endian.little); // bits/sample
+  writeString(36, 'data');
+  byteData.setUint32(40, pcm16.length * 2, Endian.little);
+
+  final out = Uint8List.view(byteData.buffer);
+  final pcmBytes = out.buffer.asUint8List(44);
+  for (var i = 0; i < pcm16.length; i++) {
+    final s = pcm16[i];
+    pcmBytes[i * 2] = s & 0xff;
+    pcmBytes[i * 2 + 1] = (s >> 8) & 0xff;
+  }
+  return out;
 }
 
 String? _pickSupportedMimeType(Object mediaRecorderCtor) {
