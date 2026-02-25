@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'web_mic_recorder_types.dart';
+
 class WebMicRecordResult {
   final Uint8List bytes;
   final String mimeType;
@@ -13,7 +15,7 @@ class WebMicRecordResult {
 }
 
 class WebMicRecorder {
-  Future<void> start() async {
+  Future<void> start({OnWebMicLiveStats? onStats}) async {
     throw UnsupportedError(
         'Web microphone recording is only available on web.');
   }

@@ -290,9 +290,8 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
         _webLastVoiceAt = null;
         _webMicInitError = null;
       });
-      if (!isLikelySafari) {
-        await _startLiveAudioAnalyzerIfPossible();
-      }
+      // Web direct speech uses recorder's own live stats callback to avoid
+      // competing microphone streams on iOS.
       _webAutoStopTimer?.cancel();
       _webAutoStopTimer = Timer(const Duration(seconds: 20), () {
         if (mounted && isListening) {
@@ -437,6 +436,44 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     });
   }
 
+  void _onWebMicLiveStats(WebMicLiveStats stats) {
+    if (!mounted || !isListening) return;
+    final now = DateTime.now();
+    final isVoice = stats.levelNorm > 0.12 || stats.pitchHz > 75;
+    if (isVoice) {
+      _webLastVoiceAt = now;
+      _webSpeechStartedAt ??= now;
+      _webHasSpeech = true;
+      _activeFrames += 1;
+    }
+    if (_listenStartedAt != null) {
+      final elapsedSec =
+          now.difference(_listenStartedAt!).inMilliseconds / 1000.0;
+      if (elapsedSec > 0) {
+        _liveSpeedEstimate = (_activeFrames / elapsedSec).clamp(0.0, 8.0);
+      }
+    }
+    setState(() {
+      _livePitchEstimateHz = stats.pitchHz;
+      _liveInputCurve.add(stats.levelNorm);
+      if (_liveInputCurve.length > 64) {
+        _liveInputCurve.removeAt(0);
+      }
+      if (_webHasSpeech) {
+        listeningStatusText = '발화 감지됨... 계속 말해 주세요.';
+      }
+    });
+
+    final startedAt = _webSpeechStartedAt;
+    final lastVoiceAt = _webLastVoiceAt;
+    if (!_webHasSpeech || startedAt == null || lastVoiceAt == null) return;
+    final speechMs = now.difference(startedAt).inMilliseconds;
+    final silenceMs = now.difference(lastVoiceAt).inMilliseconds;
+    if (speechMs >= 700 && silenceMs >= 1200) {
+      _stopListening();
+    }
+  }
+
   Future<void> _stopLiveAudioAnalyzerIfPossible() async {
     if (!kIsWeb) return;
     await _liveAudioAnalyzer.stop();
@@ -485,7 +522,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     try {
       await _webMicRecorder?.dispose();
       final recorder = createWebMicRecorder();
-      await recorder.start();
+      await recorder.start(onStats: _onWebMicLiveStats);
       _webMicRecorder = recorder;
       _webAudioBytes = null;
       _webAudioMimeType = null;
