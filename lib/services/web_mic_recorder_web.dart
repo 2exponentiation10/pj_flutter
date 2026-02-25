@@ -103,6 +103,24 @@ class WebMicRecorder {
 
     final recorder = _mediaRecorder!;
     final stopCompleter = Completer<void>();
+    final dataCompleter = Completer<void>();
+
+    js_util.callMethod<void>(recorder, 'addEventListener', [
+      'dataavailable',
+      allowInterop((dynamic event) {
+        try {
+          final data = js_util.getProperty<Object?>(event, 'data');
+          if (data == null) return;
+          final size = js_util.getProperty<num>(data, 'size');
+          if (size <= 0) return;
+          _chunks.add(data as html.Blob);
+          if (!dataCompleter.isCompleted) {
+            dataCompleter.complete();
+          }
+        } catch (_) {}
+      }),
+    ]);
+
     js_util.callMethod<void>(recorder, 'addEventListener', [
       'stop',
       allowInterop((dynamic _) {
@@ -110,11 +128,35 @@ class WebMicRecorder {
       }),
     ]);
 
-    js_util.callMethod<void>(recorder, 'stop', []);
+    // Safari may deliver the final audio blob only after an explicit flush.
+    try {
+      js_util.callMethod<void>(recorder, 'requestData', []);
+    } catch (_) {}
+    await Future.any([
+      dataCompleter.future,
+      Future<void>.delayed(const Duration(milliseconds: 250)),
+    ]);
+
+    try {
+      final state = js_util.getProperty<String?>(recorder, 'state') ?? '';
+      if (state != 'inactive') {
+        js_util.callMethod<void>(recorder, 'stop', []);
+      }
+    } catch (_) {
+      try {
+        js_util.callMethod<void>(recorder, 'stop', []);
+      } catch (_) {}
+    }
     await stopCompleter.future.timeout(
       const Duration(seconds: 5),
       onTimeout: () {},
     );
+    if (_chunks.isEmpty) {
+      await Future.any([
+        dataCompleter.future,
+        Future<void>.delayed(const Duration(milliseconds: 450)),
+      ]);
+    }
 
     await _stopStream();
 
