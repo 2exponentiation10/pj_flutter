@@ -1,18 +1,17 @@
 import 'dart:async';
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'dart:io';
-import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/browser_capability.dart';
 import '../services/live_audio_analyzer.dart';
+import '../services/native_mic_recorder.dart';
 import '../services/web_audio_capture.dart';
 import '../services/web_mic_recorder.dart';
 import '../widgets/voice_curve_compare_chart.dart';
@@ -31,9 +30,9 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   late Future<List<AppSentence>> futureSentences;
   late Future<Chapter> futureChapter;
 
-  late stt.SpeechToText _speech;
   final _api = ApiService();
   late final LiveAudioAnalyzer _liveAudioAnalyzer;
+  NativeMicRecorder? _nativeMicRecorder;
 
   int currentIndex = 0;
   bool isListening = false;
@@ -47,17 +46,17 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   String? _webAudioMimeType;
   String? _webAudioFileName;
   final List<double> _liveInputCurve = [];
-  double _soundLevelMin = 0;
-  double _soundLevelMax = 0;
   DateTime? _listenStartedAt;
-  DateTime? _lastSoundAt;
   int _activeFrames = 0;
   double _liveSpeedEstimate = 0;
   double _livePitchEstimateHz = 0;
   Timer? _webAutoStopTimer;
   bool _webHasSpeech = false;
+  bool _nativeHasSpeech = false;
   DateTime? _webSpeechStartedAt;
   DateTime? _webLastVoiceAt;
+  DateTime? _nativeSpeechStartedAt;
+  DateTime? _nativeLastVoiceAt;
   String? _webMicInitError;
   AudioWebDiagnostics? _audioDiagnostics;
   bool _diagnosticsLoading = false;
@@ -69,7 +68,6 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
     super.initState();
     futureSentences = _api.fetchSentences(widget.chapterId);
     futureChapter = _api.fetchChapter(widget.chapterId);
-    _speech = stt.SpeechToText();
     _liveAudioAnalyzer = createLiveAudioAnalyzer();
     if (kIsWeb) {
       speechRecognitionSupported = true;
@@ -90,9 +88,14 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
     }
   }
 
-  Future<void> _checkPermissions() async {
-    if (kIsWeb) return;
-    await Permission.microphone.request();
+  Future<bool> _checkPermissions() async {
+    if (kIsWeb) return true;
+    final status = await Permission.microphone.request();
+    if (status.isGranted || status.isLimited) return true;
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      await openAppSettings();
+    }
+    return false;
   }
 
   Future<void> _completeEvaluation() async {
@@ -145,7 +148,16 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   }
 
   Future<void> _startListening() async {
-    await _checkPermissions();
+    final hasPermission = await _checkPermissions();
+    if (!hasPermission) {
+      setState(() {
+        speechRecognitionSupported = false;
+        listeningStatusText = '마이크 권한이 필요합니다. 설정에서 허용해 주세요.';
+      });
+      _showErrorDialog('마이크 권한이 필요합니다. 브라우저/앱 설정에서 권한을 허용해 주세요.');
+      return;
+    }
+
     if (kIsWeb) {
       await _startWebMicRecordingIfPossible();
       if (_webMicRecorder == null) {
@@ -162,10 +174,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
         recognizedText = '';
         listeningStatusText = '발화를 시작해 주세요. 무음이 감지되면 자동 종료됩니다.';
         _liveInputCurve.clear();
-        _soundLevelMin = 0;
-        _soundLevelMax = 0;
         _listenStartedAt = DateTime.now();
-        _lastSoundAt = null;
         _activeFrames = 0;
         _liveSpeedEstimate = 0;
         _livePitchEstimateHz = 0;
@@ -173,6 +182,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
         _webSpeechStartedAt = null;
         _webLastVoiceAt = null;
         _webMicInitError = null;
+        speechRecognitionSupported = true;
       });
       // Web direct speech uses recorder's own live stats callback to avoid
       // competing microphone streams on iOS.
@@ -185,40 +195,13 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
       return;
     }
 
-    if (!speechRecognitionSupported) {
-      _showErrorDialog('이 기기에서는 음성 입력이 제한됩니다.');
-      return;
-    }
-
-    final available = await _speech.initialize(
-      onStatus: (status) {
-        if (status == 'done' || status == 'notListening') {
-          setState(() {
-            isListening = false;
-            listeningStatusText = '음성 입력이 종료되었습니다.';
-          });
-          _stopLiveAudioAnalyzerIfPossible();
-          _finalizeAndEvaluate();
-        }
-      },
-      onError: (error) {
-        setState(() {
-          isListening = false;
-          listeningStatusText = '음성 입력 오류: ${error.errorMsg}';
-        });
-        _stopLiveAudioAnalyzerIfPossible();
-        _stopWebMicRecordingIfPossible();
-        _showErrorDialog('음성 인식 오류: ${error.errorMsg}');
-      },
-    );
-
-    if (!available) {
+    await _startNativeMicRecordingIfPossible();
+    if (_nativeMicRecorder == null) {
       setState(() {
         speechRecognitionSupported = false;
         listeningStatusText = '음성 입력 초기화에 실패했습니다.';
       });
-      await _stopWebMicRecordingIfPossible();
-      _showErrorDialog('이 기기에서는 음성 인식을 사용할 수 없습니다.');
+      _showErrorDialog('마이크 초기화에 실패했습니다. 잠시 후 다시 시도해 주세요.');
       return;
     }
 
@@ -227,87 +210,34 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
       recognizedText = '';
       listeningStatusText = '음성 입력 중... 또박또박 말해 주세요.';
       _liveInputCurve.clear();
-      _soundLevelMin = 0;
-      _soundLevelMax = 0;
       _listenStartedAt = DateTime.now();
-      _lastSoundAt = null;
       _activeFrames = 0;
       _liveSpeedEstimate = 0;
       _livePitchEstimateHz = 0;
+      _nativeHasSpeech = false;
+      _nativeSpeechStartedAt = null;
+      _nativeLastVoiceAt = null;
+      speechRecognitionSupported = true;
     });
-    await _startLiveAudioAnalyzerIfPossible();
-    _speech.listen(
-      onResult: (val) {
-        setState(() {
-          recognizedText = val.recognizedWords;
-          if (val.finalResult) {
-            listeningStatusText = '입력 완료. 평가 중...';
-          }
-        });
-      },
-      listenFor: const Duration(seconds: 6),
-      pauseFor: const Duration(seconds: 3),
-      localeId: 'ko-KR',
-      onSoundLevelChange: (level) {
-        if (!kIsWeb) _onSoundLevelChange(level);
-      },
-      listenOptions: stt.SpeechListenOptions(partialResults: true),
-    );
   }
 
   Future<void> _stopListening() async {
     if (!isListening) return;
     _webAutoStopTimer?.cancel();
     _webAutoStopTimer = null;
-    final hasSpeech = !kIsWeb || _webHasSpeech;
+    final hasSpeech = kIsWeb ? _webHasSpeech : _nativeHasSpeech;
     setState(() {
       isListening = false;
       listeningStatusText =
           hasSpeech ? '음성 입력을 중지했습니다.' : '음성이 감지되지 않았습니다. 다시 시도해 주세요.';
     });
     await _stopLiveAudioAnalyzerIfPossible();
-    if (!kIsWeb) {
-      await _speech.stop();
-    }
+    if (!kIsWeb) await _stopNativeMicRecordingIfPossible();
     if (!hasSpeech) {
       await _stopWebMicRecordingIfPossible();
       return;
     }
     await _finalizeAndEvaluate();
-  }
-
-  Future<void> _startLiveAudioAnalyzerIfPossible() async {
-    if (!kIsWeb) return;
-    await _liveAudioAnalyzer.start((stats) {
-      if (!mounted || !isListening) return;
-      final now = DateTime.now();
-      final isVoice = stats.levelNorm > 0.12 || stats.pitchHz > 75;
-      if (isVoice) {
-        _webLastVoiceAt = now;
-        _webSpeechStartedAt ??= now;
-        _webHasSpeech = true;
-      }
-      setState(() {
-        _liveSpeedEstimate = stats.syllablesPerSec;
-        _livePitchEstimateHz = stats.pitchHz;
-        _liveInputCurve.add(stats.levelNorm);
-        if (_liveInputCurve.length > 64) {
-          _liveInputCurve.removeAt(0);
-        }
-        if (_webHasSpeech) {
-          listeningStatusText = '발화 감지됨... 계속 말해 주세요.';
-        }
-      });
-
-      final startedAt = _webSpeechStartedAt;
-      final lastVoiceAt = _webLastVoiceAt;
-      if (!_webHasSpeech || startedAt == null || lastVoiceAt == null) return;
-      final speechMs = now.difference(startedAt).inMilliseconds;
-      final silenceMs = now.difference(lastVoiceAt).inMilliseconds;
-      if (speechMs >= 700 && silenceMs >= 1200) {
-        _stopListening();
-      }
-    });
   }
 
   void _onWebMicLiveStats(WebMicLiveStats stats) {
@@ -348,24 +278,14 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
     }
   }
 
-  Future<void> _stopLiveAudioAnalyzerIfPossible() async {
-    if (!kIsWeb) return;
-    await _liveAudioAnalyzer.stop();
-  }
-
-  void _onSoundLevelChange(double level) {
-    final l = level.isFinite ? level : 0.0;
-    if (_liveInputCurve.isEmpty) {
-      _soundLevelMin = l;
-      _soundLevelMax = l;
-    } else {
-      _soundLevelMin = math.min(_soundLevelMin, l);
-      _soundLevelMax = math.max(_soundLevelMax, l);
-    }
-    final denom = (_soundLevelMax - _soundLevelMin).abs() + 0.0001;
-    final normalized = ((l - _soundLevelMin) / denom).clamp(0.0, 1.0);
+  void _onNativeMicLiveStats(NativeMicLiveStats stats) {
+    if (!mounted || !isListening) return;
     final now = DateTime.now();
-    if (normalized > 0.24) {
+    final isVoice = stats.levelNorm > 0.10 || stats.pitchHz > 75;
+    if (isVoice) {
+      _nativeLastVoiceAt = now;
+      _nativeSpeechStartedAt ??= now;
+      _nativeHasSpeech = true;
       _activeFrames += 1;
     }
     if (_listenStartedAt != null) {
@@ -375,20 +295,63 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
         _liveSpeedEstimate = (_activeFrames / elapsedSec).clamp(0.0, 8.0);
       }
     }
-    if (_lastSoundAt != null) {
-      final dtSec = (now.difference(_lastSoundAt!).inMilliseconds / 1000.0)
-          .clamp(0.001, 1.0);
-      final hz = (1.0 / (dtSec * 2.0)).clamp(60.0, 420.0);
-      _livePitchEstimateHz = 0.85 * _livePitchEstimateHz + 0.15 * hz;
-    }
-    _lastSoundAt = now;
-    if (!mounted) return;
+
     setState(() {
-      _liveInputCurve.add(normalized);
+      _livePitchEstimateHz = stats.pitchHz;
+      _liveInputCurve.add(stats.levelNorm);
       if (_liveInputCurve.length > 64) {
         _liveInputCurve.removeAt(0);
       }
+      if (_nativeHasSpeech) {
+        listeningStatusText = '발화 감지됨... 계속 말해 주세요.';
+      }
     });
+
+    final startedAt = _nativeSpeechStartedAt;
+    final lastVoiceAt = _nativeLastVoiceAt;
+    if (!_nativeHasSpeech || startedAt == null || lastVoiceAt == null) return;
+    final speechMs = now.difference(startedAt).inMilliseconds;
+    final silenceMs = now.difference(lastVoiceAt).inMilliseconds;
+    if (speechMs >= 700 && silenceMs >= 1200) {
+      _stopListening();
+    }
+  }
+
+  Future<void> _startNativeMicRecordingIfPossible() async {
+    if (kIsWeb) return;
+    try {
+      await _nativeMicRecorder?.dispose();
+      final recorder = NativeMicRecorder();
+      await recorder.start(onStats: _onNativeMicLiveStats);
+      _nativeMicRecorder = recorder;
+      _webAudioBytes = null;
+      _webAudioMimeType = null;
+      _webAudioFileName = null;
+    } catch (_) {
+      _nativeMicRecorder = null;
+      _webAudioBytes = null;
+      _webAudioMimeType = null;
+      _webAudioFileName = null;
+    }
+  }
+
+  Future<void> _stopNativeMicRecordingIfPossible() async {
+    if (kIsWeb || _nativeMicRecorder == null) return;
+    try {
+      final result = await _nativeMicRecorder!.stop();
+      _webAudioBytes = result?.bytes;
+      _webAudioMimeType = result?.mimeType;
+      _webAudioFileName = result?.fileName;
+    } catch (_) {
+      _webAudioBytes = null;
+      _webAudioMimeType = null;
+      _webAudioFileName = null;
+    }
+  }
+
+  Future<void> _stopLiveAudioAnalyzerIfPossible() async {
+    if (!kIsWeb) return;
+    await _liveAudioAnalyzer.stop();
   }
 
   Future<void> _startWebMicRecordingIfPossible() async {
@@ -467,7 +430,11 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
         setState(() => isEvaluatingAudio = true);
       }
       await _stopLiveAudioAnalyzerIfPossible();
-      await _stopWebMicRecordingIfPossible();
+      if (kIsWeb) {
+        await _stopWebMicRecordingIfPossible();
+      } else {
+        await _stopNativeMicRecordingIfPossible();
+      }
       await _evaluateRecognizedText(
         audioBytes: _webAudioBytes,
         overrideContentType: _webAudioMimeType,
@@ -803,7 +770,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   @override
   void dispose() {
     _webAutoStopTimer?.cancel();
-    _speech.stop();
+    _nativeMicRecorder?.dispose();
     _liveAudioAnalyzer.dispose();
     _webMicRecorder?.dispose();
     super.dispose();
