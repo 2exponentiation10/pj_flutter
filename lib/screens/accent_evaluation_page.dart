@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -56,6 +57,8 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   double _livePitchEstimateHz = 0;
   Timer? _webAutoStopTimer;
   Timer? _nativeAutoStopTimer;
+  Timer? _recordingUiTimer;
+  int _listeningElapsedMs = 0;
   bool _webHasSpeech = false;
   bool _nativeHasSpeech = false;
   DateTime? _webSpeechStartedAt;
@@ -189,7 +192,9 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
         _webLastVoiceAt = null;
         _webMicInitError = null;
         speechRecognitionSupported = true;
+        _listeningElapsedMs = 0;
       });
+      _startRecordingTicker();
       // Web direct speech uses recorder's own live stats callback to avoid
       // competing microphone streams on iOS.
       _webAutoStopTimer?.cancel();
@@ -224,7 +229,9 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
       _nativeSpeechStartedAt = null;
       _nativeLastVoiceAt = null;
       speechRecognitionSupported = true;
+      _listeningElapsedMs = 0;
     });
+    _startRecordingTicker();
     await _startNativeSttIfPossible();
     _nativeAutoStopTimer?.cancel();
     _nativeAutoStopTimer = Timer(const Duration(seconds: 12), () {
@@ -236,6 +243,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
 
   Future<void> _stopListening({bool evaluate = true}) async {
     if (!isListening) return;
+    _stopRecordingTicker();
     _webAutoStopTimer?.cancel();
     _webAutoStopTimer = null;
     _nativeAutoStopTimer?.cancel();
@@ -273,6 +281,22 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
 
   Future<void> _cancelListening() async {
     await _stopListening(evaluate: false);
+  }
+
+  void _startRecordingTicker() {
+    _recordingUiTimer?.cancel();
+    _recordingUiTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      if (!mounted || !isListening || _listenStartedAt == null) return;
+      setState(() {
+        _listeningElapsedMs =
+            DateTime.now().difference(_listenStartedAt!).inMilliseconds;
+      });
+    });
+  }
+
+  void _stopRecordingTicker() {
+    _recordingUiTimer?.cancel();
+    _recordingUiTimer = null;
   }
 
   void _onWebMicLiveStats(WebMicLiveStats stats) {
@@ -822,6 +846,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   void dispose() {
     _webAutoStopTimer?.cancel();
     _nativeAutoStopTimer?.cancel();
+    _stopRecordingTicker();
     _stopNativeSttIfPossible();
     _nativeMicRecorder?.dispose();
     _liveAudioAnalyzer.dispose();
@@ -1054,7 +1079,13 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
                       ),
                       const SizedBox(height: 8),
                       Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          16,
+                          16,
+                          math.max(
+                              16, MediaQuery.of(context).padding.bottom + 12),
+                        ),
                         child: SafeArea(
                           top: false,
                           child: Column(
@@ -1175,6 +1206,15 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
                                   isRepeatingAnimation: true,
                                 ),
                                 const SizedBox(height: 10),
+                                Text(
+                                  '경과 ${_formatElapsed(_listeningElapsedMs)} · ${(_nativeHasSpeech || _webHasSpeech) ? "발화 감지됨" : "발화 대기중"}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
                                 if (recognizedText.trim().isNotEmpty)
                                   Text(
                                     recognizedText.trim(),
@@ -1227,5 +1267,12 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
         },
       ),
     );
+  }
+
+  String _formatElapsed(int milliseconds) {
+    final totalSec = (milliseconds / 1000).floor();
+    final mm = (totalSec ~/ 60).toString().padLeft(2, '0');
+    final ss = (totalSec % 60).toString().padLeft(2, '0');
+    return '$mm:$ss';
   }
 }

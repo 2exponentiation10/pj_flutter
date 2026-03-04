@@ -343,11 +343,13 @@ class ApiService {
   }
 
   Future<String> sendChatMessage(String message) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/chat/'),
-      headers: {'Content-Type': 'application/json; charset=UTF-8'},
-      body: jsonEncode({'message': message}),
-    );
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/chat/'),
+          headers: {'Content-Type': 'application/json; charset=UTF-8'},
+          body: jsonEncode({'message': message}),
+        )
+        .timeout(const Duration(seconds: 30));
 
     if (response.statusCode == 200) {
       final data =

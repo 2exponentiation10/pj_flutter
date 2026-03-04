@@ -98,6 +98,15 @@ class ChapterProgress {
   final String chapterTitle; // 챕터의 제목입니다.
   final double progress; // 챕터 진행률입니다.
   final double accuracy; // 챕터 정확도입니다.
+  final int totalWords;
+  final int calledWords;
+  final int collectWords;
+  final int totalSentences;
+  final int calledSentences;
+  final int collectSentences;
+  final int totalItems;
+  final int calledItems;
+  final int collectItems;
 
   // ChapterProgress 객체를 초기화하는 생성자입니다.
   ChapterProgress({
@@ -105,15 +114,36 @@ class ChapterProgress {
     required this.chapterTitle,
     required this.progress,
     required this.accuracy,
+    this.totalWords = 0,
+    this.calledWords = 0,
+    this.collectWords = 0,
+    this.totalSentences = 0,
+    this.calledSentences = 0,
+    this.collectSentences = 0,
+    this.totalItems = 0,
+    this.calledItems = 0,
+    this.collectItems = 0,
   });
 
   // JSON으로부터 ChapterProgress 객체를 생성하는 팩토리 메서드입니다.
   factory ChapterProgress.fromJson(Map<String, dynamic> json) {
+    int asInt(dynamic value) => (value is num) ? value.toInt() : 0;
+    double asDouble(dynamic value) => (value is num) ? value.toDouble() : 0;
+
     return ChapterProgress(
       chapterId: json['chapter_id'],
       chapterTitle: json['chapter_title'],
-      progress: json['progress'],
-      accuracy: json['accuracy'],
+      progress: asDouble(json['progress']),
+      accuracy: asDouble(json['accuracy']),
+      totalWords: asInt(json['total_words']),
+      calledWords: asInt(json['called_words']),
+      collectWords: asInt(json['collect_words']),
+      totalSentences: asInt(json['total_sentences']),
+      calledSentences: asInt(json['called_sentences']),
+      collectSentences: asInt(json['collect_sentences']),
+      totalItems: asInt(json['total_items']),
+      calledItems: asInt(json['called_items']),
+      collectItems: asInt(json['collect_items']),
     );
   }
 }
