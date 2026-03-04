@@ -397,7 +397,8 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   void _onNativeMicLiveStats(NativeMicLiveStats stats) {
     if (!mounted || !isListening) return;
     final now = DateTime.now();
-    final isVoice = stats.levelNorm > 0.10 || stats.pitchHz > 75;
+    final isVoice = stats.levelNorm > 0.18 ||
+        (stats.levelNorm > 0.11 && stats.pitchHz > 95);
     if (isVoice) {
       _nativeLastVoiceAt = now;
       _nativeSpeechStartedAt ??= now;
@@ -427,7 +428,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     if (!_nativeHasSpeech || startedAt == null || lastVoiceAt == null) return;
     final speechMs = now.difference(startedAt).inMilliseconds;
     final silenceMs = now.difference(lastVoiceAt).inMilliseconds;
-    if (speechMs >= 700 && silenceMs >= 1200) {
+    if (speechMs >= 700 && silenceMs >= 900) {
       _stopListening();
     }
   }

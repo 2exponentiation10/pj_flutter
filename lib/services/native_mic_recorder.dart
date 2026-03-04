@@ -34,6 +34,7 @@ class NativeMicRecorder {
   String? _outputPath;
   double _previousLevel = 0;
   DateTime? _previousAt;
+  double _noiseFloorNorm = 0.03;
 
   Future<void> start({
     required void Function(NativeMicLiveStats stats) onStats,
@@ -63,14 +64,22 @@ class NativeMicRecorder {
       // dB(-160..0) -> 0..1 normalized envelope
       final db = amp.current.isFinite ? amp.current : -160.0;
       final levelNorm = ((db + 60.0) / 60.0).clamp(0.0, 1.0);
+      final gate = (_noiseFloorNorm + 0.07).clamp(0.10, 0.24);
+      final isLikelySpeech = levelNorm > gate;
+
+      if (!isLikelySpeech) {
+        _noiseFloorNorm = (_noiseFloorNorm * 0.96) + (levelNorm * 0.04);
+      }
 
       final now = DateTime.now();
       double pitchHz = 0.0;
-      if (_previousAt != null) {
+      if (isLikelySpeech && _previousAt != null) {
         final dt = (now.difference(_previousAt!).inMilliseconds / 1000.0)
             .clamp(0.001, 1.0);
         final delta = (levelNorm - _previousLevel).abs();
-        pitchHz = (75.0 + (delta / dt) * 180.0).clamp(60.0, 420.0);
+        if (delta > 0.006) {
+          pitchHz = (95.0 + (delta / dt) * 150.0).clamp(70.0, 420.0);
+        }
       }
 
       _previousAt = now;
