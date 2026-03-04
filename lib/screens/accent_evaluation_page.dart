@@ -51,6 +51,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   double _liveSpeedEstimate = 0;
   double _livePitchEstimateHz = 0;
   Timer? _webAutoStopTimer;
+  Timer? _nativeAutoStopTimer;
   bool _webHasSpeech = false;
   bool _nativeHasSpeech = false;
   DateTime? _webSpeechStartedAt;
@@ -219,12 +220,20 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
       _nativeLastVoiceAt = null;
       speechRecognitionSupported = true;
     });
+    _nativeAutoStopTimer?.cancel();
+    _nativeAutoStopTimer = Timer(const Duration(seconds: 12), () {
+      if (mounted && isListening) {
+        _stopListening();
+      }
+    });
   }
 
   Future<void> _stopListening() async {
     if (!isListening) return;
     _webAutoStopTimer?.cancel();
     _webAutoStopTimer = null;
+    _nativeAutoStopTimer?.cancel();
+    _nativeAutoStopTimer = null;
     final hasSpeech = kIsWeb ? _webHasSpeech : _nativeHasSpeech;
     setState(() {
       isListening = false;
@@ -281,8 +290,8 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   void _onNativeMicLiveStats(NativeMicLiveStats stats) {
     if (!mounted || !isListening) return;
     final now = DateTime.now();
-    final isVoice = stats.levelNorm > 0.18 ||
-        (stats.levelNorm > 0.11 && stats.pitchHz > 95);
+    final isVoice = stats.levelNorm > 0.24 ||
+        (stats.levelNorm > 0.16 && stats.pitchHz > 120);
     if (isVoice) {
       _nativeLastVoiceAt = now;
       _nativeSpeechStartedAt ??= now;
@@ -313,7 +322,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
     if (!_nativeHasSpeech || startedAt == null || lastVoiceAt == null) return;
     final speechMs = now.difference(startedAt).inMilliseconds;
     final silenceMs = now.difference(lastVoiceAt).inMilliseconds;
-    if (speechMs >= 700 && silenceMs >= 900) {
+    if (speechMs >= 650 && silenceMs >= 650) {
       _stopListening();
     }
   }
@@ -771,6 +780,7 @@ class _AccentEvaluationPageState extends State<AccentEvaluationPage> {
   @override
   void dispose() {
     _webAutoStopTimer?.cancel();
+    _nativeAutoStopTimer?.cancel();
     _nativeMicRecorder?.dispose();
     _liveAudioAnalyzer.dispose();
     _webMicRecorder?.dispose();

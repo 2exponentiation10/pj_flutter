@@ -35,6 +35,7 @@ class NativeMicRecorder {
   double _previousLevel = 0;
   DateTime? _previousAt;
   double _noiseFloorNorm = 0.03;
+  DateTime? _startedAt;
 
   Future<void> start({
     required void Function(NativeMicLiveStats stats) onStats,
@@ -56,28 +57,31 @@ class NativeMicRecorder {
     );
 
     await _recorder.start(config, path: _outputPath!);
+    _startedAt = DateTime.now();
 
     await _amplitudeSub?.cancel();
     _amplitudeSub = _recorder
         .onAmplitudeChanged(const Duration(milliseconds: 120))
         .listen((amp) {
+      final now = DateTime.now();
       // dB(-160..0) -> 0..1 normalized envelope
       final db = amp.current.isFinite ? amp.current : -160.0;
       final levelNorm = ((db + 60.0) / 60.0).clamp(0.0, 1.0);
-      final gate = (_noiseFloorNorm + 0.07).clamp(0.10, 0.24);
+      final elapsedMs =
+          _startedAt == null ? 0 : now.difference(_startedAt!).inMilliseconds;
+      final isCalibrating = elapsedMs < 900;
+      final gate = (_noiseFloorNorm + 0.11).clamp(0.16, 0.34);
       final isLikelySpeech = levelNorm > gate;
 
-      if (!isLikelySpeech) {
-        _noiseFloorNorm = (_noiseFloorNorm * 0.96) + (levelNorm * 0.04);
+      if (isCalibrating || !isLikelySpeech) {
+        _noiseFloorNorm = (_noiseFloorNorm * 0.92) + (levelNorm * 0.08);
       }
-
-      final now = DateTime.now();
       double pitchHz = 0.0;
       if (isLikelySpeech && _previousAt != null) {
         final dt = (now.difference(_previousAt!).inMilliseconds / 1000.0)
             .clamp(0.001, 1.0);
         final delta = (levelNorm - _previousLevel).abs();
-        if (delta > 0.006) {
+        if (delta > 0.010) {
           pitchHz = (95.0 + (delta / dt) * 150.0).clamp(70.0, 420.0);
         }
       }
@@ -101,6 +105,7 @@ class NativeMicRecorder {
     final output = await _recorder.stop();
     final path = output ?? _outputPath;
     _outputPath = null;
+    _startedAt = null;
 
     if (path == null) return null;
     final file = File(path);
