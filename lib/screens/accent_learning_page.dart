@@ -14,6 +14,7 @@ import 'package:googleapis_auth/auth_io.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../models/models.dart';
 import '../services/api_service.dart';
@@ -45,12 +46,15 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   int currentIndex = 0;
   late AudioPlayer audioPlayer;
   NativeMicRecorder? _nativeMicRecorder;
+  late final stt.SpeechToText _speech;
 
   bool isListening = false;
   bool isPlaying = false;
   bool isEvaluatingAudio = false;
   bool _isFinalizing = false;
   bool speechRecognitionSupported = true;
+  bool _sttInitialized = false;
+  bool _sttListening = false;
 
   String recognizedText = '';
   String listeningStatusText = '직접 말하기를 눌러 음성 입력을 시작하세요.';
@@ -83,6 +87,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     futureSentences = _api.fetchSentences(widget.chapterId);
     futureChapter = _api.fetchChapter(widget.chapterId);
     audioPlayer = AudioPlayer();
+    _speech = stt.SpeechToText();
     _liveAudioAnalyzer = createLiveAudioAnalyzer();
 
     if (kIsWeb) {
@@ -336,33 +341,54 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       _nativeLastVoiceAt = null;
       speechRecognitionSupported = true;
     });
+    await _startNativeSttIfPossible();
     _nativeAutoStopTimer?.cancel();
     _nativeAutoStopTimer = Timer(const Duration(seconds: 12), () {
       if (mounted && isListening) {
-        _stopListening();
+        _stopListening(evaluate: true);
       }
     });
   }
 
-  Future<void> _stopListening() async {
+  Future<void> _stopListening({bool evaluate = true}) async {
     if (!isListening) return;
     _webAutoStopTimer?.cancel();
     _webAutoStopTimer = null;
     _nativeAutoStopTimer?.cancel();
     _nativeAutoStopTimer = null;
+    await _stopNativeSttIfPossible();
     final hasSpeech = kIsWeb ? _webHasSpeech : _nativeHasSpeech;
     setState(() {
       isListening = false;
-      listeningStatusText =
-          hasSpeech ? '음성 입력을 중지했습니다.' : '음성이 감지되지 않았습니다. 다시 시도해 주세요.';
+      listeningStatusText = evaluate
+          ? (hasSpeech ? '음성 입력을 중지했습니다.' : '음성이 감지되지 않았습니다. 다시 시도해 주세요.')
+          : '직접 말하기를 취소했습니다.';
     });
     await _stopLiveAudioAnalyzerIfPossible();
-    if (!kIsWeb) await _stopNativeMicRecordingIfPossible();
+    if (!evaluate) {
+      if (kIsWeb) {
+        await _stopWebMicRecordingIfPossible();
+      } else {
+        await _stopNativeMicRecordingIfPossible();
+      }
+      _webAudioBytes = null;
+      _webAudioMimeType = null;
+      _webAudioFileName = null;
+      return;
+    }
     if (!hasSpeech) {
-      await _stopWebMicRecordingIfPossible();
+      if (kIsWeb) {
+        await _stopWebMicRecordingIfPossible();
+      } else {
+        await _stopNativeMicRecordingIfPossible();
+      }
       return;
     }
     await _finalizeAndEvaluate();
+  }
+
+  Future<void> _cancelListening() async {
+    await _stopListening(evaluate: false);
   }
 
   void _onWebMicLiveStats(WebMicLiveStats stats) {
@@ -399,7 +425,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     final speechMs = now.difference(startedAt).inMilliseconds;
     final silenceMs = now.difference(lastVoiceAt).inMilliseconds;
     if (speechMs >= 700 && silenceMs >= 1200) {
-      _stopListening();
+      _stopListening(evaluate: true);
     }
   }
 
@@ -438,7 +464,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     final speechMs = now.difference(startedAt).inMilliseconds;
     final silenceMs = now.difference(lastVoiceAt).inMilliseconds;
     if (speechMs >= 650 && silenceMs >= 650) {
-      _stopListening();
+      _stopListening(evaluate: true);
     }
   }
 
@@ -471,6 +497,63 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       _webAudioBytes = null;
       _webAudioMimeType = null;
       _webAudioFileName = null;
+    }
+  }
+
+  Future<void> _startNativeSttIfPossible() async {
+    if (kIsWeb || !isListening) return;
+    try {
+      if (!_sttInitialized) {
+        _sttInitialized = await _speech.initialize(
+          onStatus: (status) async {
+            if (!mounted || !isListening) return;
+            final done = status == 'done' || status == 'notListening';
+            if (done) {
+              _sttListening = false;
+              await Future<void>.delayed(const Duration(milliseconds: 160));
+              if (mounted && isListening && !_isFinalizing) {
+                await _startNativeSttIfPossible();
+              }
+            }
+          },
+          onError: (_) {
+            _sttListening = false;
+          },
+        );
+      }
+      if (!_sttInitialized || _sttListening) return;
+
+      await _speech.listen(
+        onResult: (result) {
+          if (!mounted || !isListening) return;
+          final words = result.recognizedWords.trim();
+          if (words.isEmpty) return;
+          setState(() {
+            recognizedText = words;
+          });
+        },
+        localeId: 'ko-KR',
+        listenFor: const Duration(minutes: 2),
+        pauseFor: const Duration(seconds: 2),
+        listenOptions: stt.SpeechListenOptions(
+          partialResults: true,
+          cancelOnError: true,
+        ),
+      );
+      _sttListening = true;
+    } catch (_) {
+      _sttListening = false;
+    }
+  }
+
+  Future<void> _stopNativeSttIfPossible() async {
+    if (kIsWeb) return;
+    try {
+      await _speech.stop();
+    } catch (_) {
+      // Ignore stop-time STT errors.
+    } finally {
+      _sttListening = false;
     }
   }
 
@@ -592,7 +675,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       final result = await _api.evaluatePronunciation(
         sentenceId: current.id,
         referenceText: current.koreanSentence,
-        recognizedText: '',
+        recognizedText: recognizedText.trim(),
         audioBytes: audioBytes,
         fileName: overrideFileName ?? _buildAudioFileName(contentType),
         contentType: contentType,
@@ -603,6 +686,11 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
         result.transcript,
       );
       if (!mounted) return;
+      if (result.transcript.trim().isNotEmpty) {
+        setState(() {
+          recognizedText = result.transcript.trim();
+        });
+      }
       _showEvaluationPopup(result);
     } catch (e) {
       _showErrorDialog('평가 요청 실패: $e');
@@ -761,125 +849,77 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   }
 
   void _showEvaluationPopup(PronunciationEvaluationResult result) {
-    showDialog(
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '평가 ${result.scorePercent.toStringAsFixed(1)}점 · ${result.scoreLevel.isEmpty ? "등급 없음" : result.scoreLevel}',
+        ),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: '상세',
+          onPressed: () => _showEvaluationDetailSheet(result),
+        ),
+      ),
+    );
+  }
+
+  void _showEvaluationDetailSheet(PronunciationEvaluationResult result) {
+    if (!mounted) return;
+    showModalBottomSheet<void>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('평가 결과'),
-          content: SizedBox(
-            width: 420,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('점수: ${result.scorePercent.toStringAsFixed(2)}%'),
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '평가 상세',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                Text('점수: ${result.scorePercent.toStringAsFixed(2)}%'),
+                Text('피드백: ${result.feedback}'),
+                if (result.audioMetricsAvailable) ...[
                   const SizedBox(height: 8),
-                  Text('피드백: ${result.feedback}'),
-                  const SizedBox(height: 8),
-                  if (result.audioMetricsAvailable) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                        '속도 점수: ${((result.speedScore ?? 0) * 100).toStringAsFixed(1)}%'),
-                    Text(
-                        '피치 점수: ${((result.pitchScore ?? 0) * 100).toStringAsFixed(1)}%'),
-                    Text(
-                        '음량 점수: ${((result.volumeScore ?? 0) * 100).toStringAsFixed(1)}%'),
-                    Text(
-                        '음성 길이(내/기준): ${(result.audioDurationSec ?? 0).toStringAsFixed(2)}초 / ${(result.referenceDurationSec ?? 0).toStringAsFixed(2)}초'),
-                    Text(
-                        '피치 중앙값: ${(result.pitchMedianHz ?? 0).toStringAsFixed(1)}Hz / 변동성: ${(result.pitchStdHz ?? 0).toStringAsFixed(1)}Hz'),
-                    if (result.pitchCurveSimilarity != null)
-                      Text(
-                        '피치 유사도: ${(result.pitchCurveSimilarity! * 100).toStringAsFixed(1)}%',
-                      ),
-                    if (result.volumeCurveSimilarity != null)
-                      Text(
-                        '음량 유사도: ${(result.volumeCurveSimilarity! * 100).toStringAsFixed(1)}%',
-                      ),
-                    if (result.pitchVerdict.isNotEmpty)
-                      Text('피치 판정: ${result.pitchVerdict}'),
-                    if (result.sentenceAttemptsCount != null)
-                      Text('누적 시도: ${result.sentenceAttemptsCount}회'),
-                    if (result.sentenceBestScore != null)
-                      Text(
-                        '최고 점수: ${result.sentenceBestScore!.toStringAsFixed(2)}%',
-                      ),
-                    if (result.recentAvgScore != null)
-                      Text(
-                        '최근 ${result.recentWindowSize ?? 3}회 평균: ${result.recentAvgScore!.toStringAsFixed(2)}% (편차 ${(result.recentScoreStddev ?? 0).toStringAsFixed(2)})',
-                      ),
-                    if (result.referencePitchCurve.isNotEmpty &&
-                        result.userPitchCurve.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      const Text('피치 곡선 비교',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 6),
-                      SizedBox(
-                        height: 120,
-                        child: VoiceCurveCompareChart(
-                          referenceCurve: result.referencePitchCurve,
-                          userCurve: result.userPitchCurve,
-                          referenceLabel: '기준 TTS',
-                          userLabel: '내 입력',
-                        ),
-                      ),
-                    ],
-                    if (result.referenceVolumeCurve.isNotEmpty &&
-                        result.userVolumeCurve.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      const Text('음량 곡선 비교',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 6),
-                      SizedBox(
-                        height: 120,
-                        child: VoiceCurveCompareChart(
-                          referenceCurve: result.referenceVolumeCurve,
-                          userCurve: result.userVolumeCurve,
-                          referenceLabel: '기준 TTS',
-                          userLabel: '내 입력',
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 8),
-                  ],
-                  const Text(
-                    '평가 기준: 피치 45% + 속도 35% + 음량 20% (음성 직접 비교)',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                  const SizedBox(height: 6),
                   Text(
-                    '모델: ${result.model}',
-                    style: const TextStyle(fontSize: 12),
-                  ),
+                      '속도 점수: ${((result.speedScore ?? 0) * 100).toStringAsFixed(1)}%'),
+                  Text(
+                      '피치 점수: ${((result.pitchScore ?? 0) * 100).toStringAsFixed(1)}%'),
+                  Text(
+                      '음량 점수: ${((result.volumeScore ?? 0) * 100).toStringAsFixed(1)}%'),
                 ],
-              ),
+                const SizedBox(height: 8),
+                const Text(
+                  '평가 기준: 피치 45% + 속도 35% + 음량 20% (음성 직접 비교)',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 6),
+                Text('모델: ${result.model}',
+                    style: const TextStyle(fontSize: 12)),
+              ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('닫기'),
-            ),
-          ],
-        );
-      },
+        ),
+      ),
     );
   }
 
   void _showErrorDialog(String message) {
     if (!mounted) return;
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('오류'),
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
         content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('확인'),
-          ),
-        ],
+        backgroundColor: Colors.red.shade700,
+        duration: const Duration(seconds: 4),
       ),
     );
   }
@@ -888,6 +928,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   void dispose() {
     _webAutoStopTimer?.cancel();
     _nativeAutoStopTimer?.cancel();
+    _stopNativeSttIfPossible();
     _nativeMicRecorder?.dispose();
     _liveAudioAnalyzer.dispose();
     _webMicRecorder?.dispose();
@@ -1029,6 +1070,16 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                 ),
                               ],
                             ),
+                            if (recognizedText.trim().isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                '실시간 인식: ${recognizedText.trim()}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                             if (_liveInputCurve.length > 2) ...[
                               const SizedBox(height: 10),
                               const Text('입력 음성 형태(실시간 레벨)'),
@@ -1243,7 +1294,7 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                                     (!kIsWeb && !speechRecognitionSupported)
                                         ? null
                                         : () => isListening
-                                            ? _stopListening()
+                                            ? _stopListening(evaluate: true)
                                             : _startListening(),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.black,
@@ -1294,19 +1345,65 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
                               topRight: Radius.circular(20),
                             ),
                           ),
-                          child: Center(
-                            child: AnimatedTextKit(
-                              animatedTexts: [
-                                WavyAnimatedText(
-                                  '말하는 중...',
-                                  textStyle: const TextStyle(
-                                    fontSize: 24,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                AnimatedTextKit(
+                                  animatedTexts: [
+                                    WavyAnimatedText(
+                                      '말하는 중...',
+                                      textStyle: const TextStyle(
+                                        fontSize: 24,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                  isRepeatingAnimation: true,
+                                ),
+                                const SizedBox(height: 10),
+                                if (recognizedText.trim().isNotEmpty)
+                                  Text(
+                                    recognizedText.trim(),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                    ),
                                   ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        onPressed: () =>
+                                            _stopListening(evaluate: true),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.white,
+                                          foregroundColor: Colors.blue.shade800,
+                                        ),
+                                        child: const Text('중단 후 평가'),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: _cancelListening,
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.white,
+                                          side: const BorderSide(
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        child: const Text('취소'),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
-                              isRepeatingAnimation: true,
                             ),
                           ),
                         ),

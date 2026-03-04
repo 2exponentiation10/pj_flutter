@@ -109,9 +109,14 @@ class NativeMicRecorder {
 
     if (path == null) return null;
     final file = File(path);
-    if (!await file.exists()) return null;
-
-    final bytes = await file.readAsBytes();
+    Uint8List bytes = Uint8List(0);
+    for (var i = 0; i < 6; i++) {
+      if (await file.exists()) {
+        bytes = await file.readAsBytes();
+        if (bytes.isNotEmpty) break;
+      }
+      await Future<void>.delayed(Duration(milliseconds: 120 * (i + 1)));
+    }
     if (bytes.isEmpty) return null;
 
     final fileName = path.split('/').last;
