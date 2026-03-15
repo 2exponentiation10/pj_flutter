@@ -247,7 +247,9 @@ class ApiService {
     );
 
     if (response.statusCode == 200) {
-      return ProgressData.fromJson(json.decode(response.body));
+      return ProgressData.fromJson(
+        json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+      );
     } else {
       throw Exception('Failed to load progress data');
     }
