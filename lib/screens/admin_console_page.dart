@@ -342,7 +342,22 @@ class _AdminConsolePageState extends State<AdminConsolePage>
                         DropdownMenuItem(
                             value: 'general', child: Text('general')),
                       ],
-                      onChanged: (v) => category = v ?? 'word',
+                      onChanged: (v) {
+                        category = v ?? 'word';
+                        if (category == 'general') {
+                          chapterId = null;
+                          wordId = null;
+                          sentenceId = null;
+                        } else if (category == 'chapter') {
+                          wordId = null;
+                          sentenceId = null;
+                        } else if (category == 'word') {
+                          sentenceId = null;
+                        } else if (category == 'sentence') {
+                          wordId = null;
+                        }
+                        setStateDialog(() {});
+                      },
                       decoration: const InputDecoration(labelText: '카테고리'),
                     ),
                     const SizedBox(height: 10),
@@ -356,50 +371,102 @@ class _AdminConsolePageState extends State<AdminConsolePage>
                           labelText: 'key_text(자동매핑용: 단어/문장 원문)'),
                     ),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<int?>(
-                      value: chapterId,
-                      items: [
-                        const DropdownMenuItem<int?>(
-                            value: null, child: Text('챕터 연결 없음')),
-                        ..._chapters.map(
-                          (c) => DropdownMenuItem<int?>(
-                              value: c.id, child: Text('#${c.id} ${c.title}')),
-                        ),
-                      ],
-                      onChanged: (v) => chapterId = v,
-                      decoration: const InputDecoration(labelText: '챕터 연결'),
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<int?>(
-                      value: wordId,
-                      items: [
-                        const DropdownMenuItem<int?>(
-                            value: null, child: Text('단어 연결 없음')),
-                        ..._words.map(
-                          (w) => DropdownMenuItem<int?>(
-                              value: w.id,
-                              child: Text('#${w.id} ${w.koreanWord}')),
-                        ),
-                      ],
-                      onChanged: (v) => wordId = v,
-                      decoration: const InputDecoration(labelText: '단어 연결'),
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<int?>(
-                      value: sentenceId,
-                      items: [
-                        const DropdownMenuItem<int?>(
-                            value: null, child: Text('문장 연결 없음')),
-                        ..._sentences.map(
-                          (s) => DropdownMenuItem<int?>(
-                            value: s.id,
-                            child: Text('#${s.id} ${s.koreanSentence}'),
+                    if (category == 'chapter' ||
+                        category == 'word' ||
+                        category == 'sentence') ...[
+                      DropdownButtonFormField<int?>(
+                        value: chapterId,
+                        items: [
+                          const DropdownMenuItem<int?>(
+                              value: null, child: Text('챕터 연결 없음')),
+                          ..._chapters.map(
+                            (c) => DropdownMenuItem<int?>(
+                                value: c.id,
+                                child: Text('#${c.id} ${c.title}')),
                           ),
-                        ),
-                      ],
-                      onChanged: (v) => sentenceId = v,
-                      decoration: const InputDecoration(labelText: '문장 연결'),
-                    ),
+                        ],
+                        onChanged: (v) {
+                          chapterId = v;
+                          setStateDialog(() {});
+                        },
+                        decoration: const InputDecoration(labelText: '챕터 연결'),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    if (category == 'word') ...[
+                      DropdownButtonFormField<int?>(
+                        value: wordId,
+                        items: [
+                          const DropdownMenuItem<int?>(
+                              value: null, child: Text('단어 연결 없음')),
+                          ..._words
+                              .where((w) =>
+                                  chapterId == null || w.chapterId == chapterId)
+                              .map(
+                                (w) => DropdownMenuItem<int?>(
+                                  value: w.id,
+                                  child: Text('#${w.id} ${w.koreanWord}'),
+                                ),
+                              ),
+                        ],
+                        onChanged: (v) {
+                          wordId = v;
+                          Word? selectedWord;
+                          for (final word in _words) {
+                            if (word.id == v) {
+                              selectedWord = word;
+                              break;
+                            }
+                          }
+                          if (selectedWord != null) {
+                            chapterId = selectedWord.chapterId;
+                            if (keyCtrl.text.trim().isEmpty) {
+                              keyCtrl.text = selectedWord.koreanWord;
+                            }
+                          }
+                          setStateDialog(() {});
+                        },
+                        decoration: const InputDecoration(labelText: '단어 연결'),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    if (category == 'sentence') ...[
+                      DropdownButtonFormField<int?>(
+                        value: sentenceId,
+                        items: [
+                          const DropdownMenuItem<int?>(
+                              value: null, child: Text('문장 연결 없음')),
+                          ..._sentences
+                              .where((s) =>
+                                  chapterId == null || s.chapterId == chapterId)
+                              .map(
+                                (s) => DropdownMenuItem<int?>(
+                                  value: s.id,
+                                  child: Text('#${s.id} ${s.koreanSentence}'),
+                                ),
+                              ),
+                        ],
+                        onChanged: (v) {
+                          sentenceId = v;
+                          AppSentence? selectedSentence;
+                          for (final sentence in _sentences) {
+                            if (sentence.id == v) {
+                              selectedSentence = sentence;
+                              break;
+                            }
+                          }
+                          if (selectedSentence != null) {
+                            chapterId = selectedSentence.chapterId;
+                            if (keyCtrl.text.trim().isEmpty) {
+                              keyCtrl.text = selectedSentence.koreanSentence;
+                            }
+                          }
+                          setStateDialog(() {});
+                        },
+                        decoration: const InputDecoration(labelText: '문장 연결'),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
                       onPressed: () async {
@@ -429,6 +496,18 @@ class _AdminConsolePageState extends State<AdminConsolePage>
                           : '선택됨: $selectedName (${selectedBytes!.lengthInBytes} bytes)',
                       style: const TextStyle(fontSize: 12),
                     ),
+                    if (selectedBytes != null) ...[
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.memory(
+                          selectedBytes!,
+                          height: 160,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

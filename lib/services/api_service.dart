@@ -577,7 +577,7 @@ class ApiService {
   Future<List<MediaAssetItem>> fetchMediaAssets() async {
     final response = await http.get(Uri.parse('$baseUrl/media-assets/'));
     if (response.statusCode != 200) {
-      throw Exception('Failed to load media assets');
+      throw Exception('Failed to load media assets: ${response.body}');
     }
     final list = json.decode(utf8.decode(response.bodyBytes)) as List<dynamic>;
     return list
