@@ -632,4 +632,19 @@ class ApiService {
       throw Exception('Failed to delete media asset: ${response.body}');
     }
   }
+
+  Future<Map<String, dynamic>> regenerateLearningVisuals({
+    required String adminPin,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/regenerate-learning-visuals/'),
+      headers: {
+        'X-Admin-Pin': adminPin,
+      },
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to regenerate visuals: ${response.body}');
+    }
+    return json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+  }
 }

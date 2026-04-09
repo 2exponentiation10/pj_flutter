@@ -9,7 +9,12 @@ import '../models/models.dart';
 import '../services/api_service.dart';
 
 class AdminConsolePage extends StatefulWidget {
-  const AdminConsolePage({super.key});
+  const AdminConsolePage({
+    super.key,
+    required this.adminPin,
+  });
+
+  final String adminPin;
 
   @override
   State<AdminConsolePage> createState() => _AdminConsolePageState();
@@ -23,6 +28,7 @@ class _AdminConsolePageState extends State<AdminConsolePage>
   late final TabController _tabController;
 
   bool _isLoading = true;
+  bool _isRegeneratingVisuals = false;
   String _searchQuery = '';
   String _assetCategoryFilter = 'all';
 
@@ -66,6 +72,25 @@ class _AdminConsolePageState extends State<AdminConsolePage>
       _showSnack('관리 데이터 로드 실패: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _regenerateLearningVisuals() async {
+    setState(() => _isRegeneratingVisuals = true);
+    try {
+      final result = await _api.regenerateLearningVisuals(
+        adminPin: widget.adminPin,
+      );
+      await _refreshAll();
+      _showSnack(
+        '자동 시각자료 재생성 완료 · 챕터 ${result['chapters']} / 단어 ${result['words']} / 문장 ${result['sentences']}',
+      );
+    } catch (e) {
+      _showSnack('자동 시각자료 재생성 실패: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isRegeneratingVisuals = false);
+      }
     }
   }
 
@@ -566,6 +591,18 @@ class _AdminConsolePageState extends State<AdminConsolePage>
       appBar: AppBar(
         title: const Text('시나브로 Admin Studio'),
         actions: [
+          TextButton.icon(
+            onPressed:
+                _isRegeneratingVisuals ? null : _regenerateLearningVisuals,
+            icon: _isRegeneratingVisuals
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.auto_awesome_rounded),
+            label: const Text('자동 시각자료'),
+          ),
           IconButton(
               onPressed: _refreshAll, icon: const Icon(Icons.refresh_rounded)),
         ],
@@ -660,6 +697,42 @@ class _AdminConsolePageState extends State<AdminConsolePage>
           ),
           const SizedBox(height: 4),
           const Text('챕터, 단어/문장, 이미지 자산을 한 곳에서 관리합니다.'),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color:
+                  Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.auto_awesome_rounded),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    '챕터 커버, 단어 카드, 문장 장면 카드를 자동으로 다시 생성할 수 있습니다.',
+                  ),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: _isRegeneratingVisuals
+                      ? null
+                      : _regenerateLearningVisuals,
+                  icon: _isRegeneratingVisuals
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh_rounded),
+                  label: const Text('다시 생성'),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,

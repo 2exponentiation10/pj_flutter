@@ -77,10 +77,12 @@ class _HomePageState extends State<HomePage> {
         _logoTapCount += 1;
         if (_logoTapCount >= 10) {
           _logoTapCount = 0;
-          final ok = await _verifyAdminPin();
-          if (!mounted || !ok) return;
-          Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const AdminConsolePage()));
+          final adminPin = await _verifyAdminPin();
+          if (!mounted || adminPin == null) return;
+          Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => AdminConsolePage(adminPin: adminPin)));
           return;
         }
         if (_logoTapCount >= 7) {
@@ -101,7 +103,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<bool> _verifyAdminPin() async {
+  Future<String?> _verifyAdminPin() async {
     final configuredPin = const String.fromEnvironment(
       'ADMIN_CONSOLE_PIN',
       defaultValue: _defaultAdminPin,
@@ -169,7 +171,7 @@ class _HomePageState extends State<HomePage> {
         const SnackBar(content: Text('관리자 인증에 실패했습니다.')),
       );
     }
-    return unlocked;
+    return unlocked ? controller.text.trim() : null;
   }
 }
 
