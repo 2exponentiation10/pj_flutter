@@ -633,7 +633,7 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> regenerateLearningVisuals({
+  Future<VisualGenerationJobStatus> regenerateLearningVisuals({
     required String adminPin,
   }) async {
     final response = await http.post(
@@ -642,9 +642,31 @@ class ApiService {
         'X-Admin-Pin': adminPin,
       },
     );
-    if (response.statusCode != 200) {
+    if (response.statusCode != 202) {
       throw Exception('Failed to regenerate visuals: ${response.body}');
     }
-    return json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    return VisualGenerationJobStatus.fromJson(
+      json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+    );
+  }
+
+  Future<VisualGenerationJobStatus?> fetchLatestLearningVisualJob({
+    required String adminPin,
+  }) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/admin/regenerate-learning-visuals/latest/'),
+      headers: {
+        'X-Admin-Pin': adminPin,
+      },
+    );
+    if (response.statusCode == 404) {
+      return null;
+    }
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load visual job status: ${response.body}');
+    }
+    return VisualGenerationJobStatus.fromJson(
+      json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+    );
   }
 }

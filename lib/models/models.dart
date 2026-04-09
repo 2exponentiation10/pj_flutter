@@ -228,6 +228,65 @@ class MediaAssetItem {
   }
 }
 
+class VisualGenerationJobStatus {
+  final int id;
+  final String status;
+  final int totalItems;
+  final int completedItems;
+  final double progressRatio;
+  final int chaptersCount;
+  final int wordsCount;
+  final int sentencesCount;
+  final String message;
+  final String errorText;
+  final DateTime createdAt;
+  final DateTime? startedAt;
+  final DateTime? finishedAt;
+
+  const VisualGenerationJobStatus({
+    required this.id,
+    required this.status,
+    required this.totalItems,
+    required this.completedItems,
+    required this.progressRatio,
+    required this.chaptersCount,
+    required this.wordsCount,
+    required this.sentencesCount,
+    required this.message,
+    required this.errorText,
+    required this.createdAt,
+    required this.startedAt,
+    required this.finishedAt,
+  });
+
+  bool get isRunning => status == 'queued' || status == 'running';
+  bool get isDone => status == 'succeeded' || status == 'failed';
+
+  factory VisualGenerationJobStatus.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDate(dynamic value) {
+      final text = (value ?? '').toString();
+      if (text.isEmpty) return null;
+      return DateTime.tryParse(text);
+    }
+
+    return VisualGenerationJobStatus(
+      id: (json['id'] as num).toInt(),
+      status: (json['status'] ?? 'queued').toString(),
+      totalItems: (json['total_items'] as num? ?? 0).toInt(),
+      completedItems: (json['completed_items'] as num? ?? 0).toInt(),
+      progressRatio: (json['progress_ratio'] as num? ?? 0).toDouble(),
+      chaptersCount: (json['chapters_count'] as num? ?? 0).toInt(),
+      wordsCount: (json['words_count'] as num? ?? 0).toInt(),
+      sentencesCount: (json['sentences_count'] as num? ?? 0).toInt(),
+      message: (json['message'] ?? '').toString(),
+      errorText: (json['error_text'] ?? '').toString(),
+      createdAt: parseDate(json['created_at']) ?? DateTime.now(),
+      startedAt: parseDate(json['started_at']),
+      finishedAt: parseDate(json['finished_at']),
+    );
+  }
+}
+
 class PronunciationEvaluationResult {
   final String transcript;
   final double accuracyRatio;

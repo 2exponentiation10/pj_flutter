@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -26,11 +27,14 @@ class _AdminConsolePageState extends State<AdminConsolePage>
   final TextEditingController _searchController = TextEditingController();
 
   late final TabController _tabController;
+  Timer? _visualJobPollingTimer;
 
   bool _isLoading = true;
   bool _isRegeneratingVisuals = false;
   String _searchQuery = '';
   String _assetCategoryFilter = 'all';
+  VisualGenerationJobStatus? _visualJob;
+  int? _lastAnnouncedVisualJobId;
 
   List<Chapter> _chapters = const [];
   List<Word> _words = const [];
@@ -45,10 +49,12 @@ class _AdminConsolePageState extends State<AdminConsolePage>
         if (mounted) setState(() {});
       });
     _refreshAll();
+    unawaited(_loadLatestVisualJob());
   }
 
   @override
   void dispose() {
+    _visualJobPollingTimer?.cancel();
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -75,20 +81,75 @@ class _AdminConsolePageState extends State<AdminConsolePage>
     }
   }
 
+  Future<void> _loadLatestVisualJob({bool announceCompletion = false}) async {
+    try {
+      final job = await _api.fetchLatestLearningVisualJob(
+        adminPin: widget.adminPin,
+      );
+      if (!mounted) return;
+
+      final previousJob = _visualJob;
+      setState(() {
+        _visualJob = job;
+        _isRegeneratingVisuals = job?.isRunning ?? false;
+      });
+
+      if (job != null && job.isRunning) {
+        _startVisualJobPolling();
+      } else {
+        _visualJobPollingTimer?.cancel();
+      }
+
+      final justFinished = previousJob != null &&
+          previousJob.id == job?.id &&
+          previousJob.isRunning &&
+          job != null &&
+          !job.isRunning;
+      if (announceCompletion &&
+          justFinished &&
+          _lastAnnouncedVisualJobId != job.id) {
+        _lastAnnouncedVisualJobId = job.id;
+        if (job.status == 'succeeded') {
+          await _refreshAll();
+          _showSnack(
+            '자동 시각자료 재생성 완료 · 챕터 ${job.chaptersCount} / 단어 ${job.wordsCount} / 문장 ${job.sentencesCount}',
+          );
+        } else if (job.status == 'failed') {
+          _showSnack(
+            '자동 시각자료 재생성 실패: ${job.errorText.isEmpty ? job.message : job.errorText}',
+          );
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('시각자료 작업 상태 조회 실패: $e');
+    }
+  }
+
+  void _startVisualJobPolling() {
+    _visualJobPollingTimer?.cancel();
+    _visualJobPollingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(_loadLatestVisualJob(announceCompletion: true));
+    });
+  }
+
   Future<void> _regenerateLearningVisuals() async {
     setState(() => _isRegeneratingVisuals = true);
     try {
-      final result = await _api.regenerateLearningVisuals(
+      final job = await _api.regenerateLearningVisuals(
         adminPin: widget.adminPin,
       );
-      await _refreshAll();
-      _showSnack(
-        '자동 시각자료 재생성 완료 · 챕터 ${result['chapters']} / 단어 ${result['words']} / 문장 ${result['sentences']}',
-      );
+      if (!mounted) return;
+      setState(() {
+        _visualJob = job;
+        _isRegeneratingVisuals = job.isRunning;
+      });
+      _startVisualJobPolling();
+      _showSnack('자동 시각자료 재생성 작업을 시작했습니다.');
     } catch (e) {
       _showSnack('자동 시각자료 재생성 실패: $e');
     } finally {
-      if (mounted) {
+      if (mounted && !(_visualJob?.isRunning ?? false)) {
         setState(() => _isRegeneratingVisuals = false);
       }
     }
@@ -733,6 +794,77 @@ class _AdminConsolePageState extends State<AdminConsolePage>
               ],
             ),
           ),
+          if (_visualJob != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .surface
+                    .withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _visualJob!.status == 'failed'
+                            ? Icons.error_outline_rounded
+                            : _visualJob!.isRunning
+                                ? Icons.sync_rounded
+                                : Icons.check_circle_outline_rounded,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '최근 시각자료 작업 #${_visualJob!.id} · ${_visualJob!.status}',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => _loadLatestVisualJob(),
+                        child: const Text('상태 갱신'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: _visualJob!.totalItems == 0
+                        ? null
+                        : _visualJob!.progressRatio.clamp(0, 1),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(_visualJob!.message.isEmpty
+                      ? '상태 메시지 없음'
+                      : _visualJob!.message),
+                  const SizedBox(height: 6),
+                  Text(
+                    '진행 ${_visualJob!.completedItems}/${_visualJob!.totalItems} · 챕터 ${_visualJob!.chaptersCount} / 단어 ${_visualJob!.wordsCount} / 문장 ${_visualJob!.sentencesCount}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  if (_visualJob!.errorText.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _visualJob!.errorText,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
