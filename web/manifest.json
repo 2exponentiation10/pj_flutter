@@ -1,11 +1,11 @@
 {
-    "name": "onsaemiro",
-    "short_name": "onsaemiro",
+    "name": "시나브로",
+    "short_name": "시나브로",
+    "description": "북한이탈주민 한국어 교정 학습 웹앱",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
