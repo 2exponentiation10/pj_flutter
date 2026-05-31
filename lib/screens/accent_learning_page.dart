@@ -1,19 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:animated_text_kit/animated_text_kit.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
-import 'package:googleapis/texttospeech/v1.dart' as tts;
-import 'package:googleapis_auth/auth_io.dart';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
@@ -45,12 +39,10 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
   late final LiveAudioAnalyzer _liveAudioAnalyzer;
 
   int currentIndex = 0;
-  late AudioPlayer audioPlayer;
   NativeMicRecorder? _nativeMicRecorder;
   late final stt.SpeechToText _speech;
 
   bool isListening = false;
-  bool isPlaying = false;
   bool isEvaluatingAudio = false;
   bool _isFinalizing = false;
   bool speechRecognitionSupported = true;
@@ -89,7 +81,6 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     super.initState();
     futureSentences = _api.fetchSentences(widget.chapterId);
     futureChapter = _api.fetchChapter(widget.chapterId);
-    audioPlayer = AudioPlayer();
     _speech = stt.SpeechToText();
     _liveAudioAnalyzer = createLiveAudioAnalyzer();
 
@@ -122,14 +113,6 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     return false;
   }
 
-  Future<AutoRefreshingAuthClient> _getAuthClient() async {
-    final serviceAccountJson =
-        await rootBundle.loadString('assets/service_account.json');
-    final credentials = ServiceAccountCredentials.fromJson(serviceAccountJson);
-    final scopes = [tts.TexttospeechApi.cloudPlatformScope];
-    return clientViaServiceAccount(credentials, scopes);
-  }
-
   Future<void> _playTextToSpeech(String text) async {
     if (kIsWeb) {
       final ok = await TtsService.speak(text, rate: 0.9);
@@ -141,54 +124,12 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
       return;
     }
 
-    try {
-      final authClient = await _getAuthClient();
-      final ttsApi = tts.TexttospeechApi(authClient);
-
-      final input = tts.SynthesizeSpeechRequest(
-        input: tts.SynthesisInput(text: text),
-        voice: tts.VoiceSelectionParams(
-          languageCode: 'ko-KR',
-          name: 'ko-KR-Wavenet-D',
-        ),
-        audioConfig: tts.AudioConfig(audioEncoding: 'MP3', speakingRate: 0.9),
+    final ok = await TtsService.speak(text, rate: 0.9);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('음성 재생에 실패했습니다.')),
       );
-
-      final response = await ttsApi.text.synthesize(input);
-      final audioContent = base64Decode(response.audioContent!);
-      final tempDir = await getTemporaryDirectory();
-      final tempFile = File('${tempDir.path}/tts.mp3');
-      await tempFile.writeAsBytes(audioContent);
-
-      setState(() {
-        isPlaying = true;
-        playCount = 0;
-      });
-
-      await _playAudioFile(tempFile.path);
-    } catch (_) {
-      final fallbackOk = await TtsService.speak(text, rate: 0.9);
-      if (!fallbackOk && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('음성 재생에 실패했습니다.')),
-        );
-      }
     }
-  }
-
-  Future<void> _playAudioFile(String filePath) async {
-    await audioPlayer.play(DeviceFileSource(filePath));
-
-    audioPlayer.onPlayerComplete.listen((_) async {
-      playCount++;
-      if (playCount < 2) {
-        await audioPlayer.play(DeviceFileSource(filePath));
-      } else {
-        await Future.delayed(const Duration(seconds: 1));
-        if (!mounted) return;
-        setState(() => isPlaying = false);
-      }
-    });
   }
 
   Future<void> _saveSentence(int sentenceId) async {
@@ -957,7 +898,6 @@ class _AccentLearningPageState extends State<AccentLearningPage> {
     _nativeMicRecorder?.dispose();
     _liveAudioAnalyzer.dispose();
     _webMicRecorder?.dispose();
-    audioPlayer.dispose();
     super.dispose();
   }
 

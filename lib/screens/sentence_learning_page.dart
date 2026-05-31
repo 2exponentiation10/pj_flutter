@@ -1,14 +1,7 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:googleapis_auth/auth_io.dart';
-import 'package:googleapis/texttospeech/v1.dart' as tts;
 import 'package:onsaemiro/screens/sentence_learning_result_page.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:animated_text_kit/animated_text_kit.dart';
 import '../services/api_service.dart';
 import '../services/tts_service.dart';
@@ -28,9 +21,7 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
   late Future<List<AppSentence>> futureSentences; // 문장을 받아오기 위한 Future
   late Future<Chapter> futureChapter; // 챕터를 받아오기 위한 Future
   int currentIndex = 0; // 현재 문장의 인덱스
-  late AudioPlayer audioPlayer; // 오디오 플레이어
   bool isPlaying = false; // 오디오 재생 상태
-  int playCount = 0; // 오디오 재생 횟수
 
   @override
   void initState() {
@@ -39,21 +30,6 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
         ApiService().fetchSentences(widget.chapterId); // 챕터 ID로 문장 목록을 받아옴
     futureChapter =
         ApiService().fetchChapter(widget.chapterId); // 챕터 ID로 챕터 정보를 받아옴
-    audioPlayer = AudioPlayer(); // 오디오 플레이어 초기화
-  }
-
-  Future<AutoRefreshingAuthClient> _getAuthClient() async {
-    try {
-      final serviceAccountJson =
-          await rootBundle.loadString('assets/service_account.json');
-      final credentials =
-          ServiceAccountCredentials.fromJson(serviceAccountJson);
-      final scopes = [tts.TexttospeechApi.cloudPlatformScope];
-      return clientViaServiceAccount(credentials, scopes);
-    } catch (e) {
-      print('Error loading service account credentials: $e');
-      rethrow;
-    }
   }
 
   Future<void> _playTextToSpeech(String text) async {
@@ -66,61 +42,44 @@ class _SentenceLearningPageState extends State<SentenceLearningPage> {
       );
       return;
     }
-    try {
-      final authClient = await _getAuthClient();
-      final ttsApi = tts.TexttospeechApi(authClient);
 
-      final input = tts.SynthesizeSpeechRequest(
-        input: tts.SynthesisInput(text: text),
-        voice: tts.VoiceSelectionParams(
-            languageCode: 'ko-KR', name: 'ko-KR-Wavenet-D'),
-        audioConfig: tts.AudioConfig(audioEncoding: 'MP3', speakingRate: 0.9),
-      );
-
-      final response = await ttsApi.text.synthesize(input);
-      final audioContent = base64Decode(response.audioContent!);
-      final tempDir = await getTemporaryDirectory();
-      final tempFile = File('${tempDir.path}/tts.mp3');
-      await tempFile.writeAsBytes(audioContent);
-
+    if (mounted) {
       setState(() {
         isPlaying = true;
-        playCount = 0;
       });
-
-      await _playAudioFile(tempFile.path);
-    } catch (e) {
-      final fallbackOk = await TtsService.speak(text, rate: 0.9);
-      if (!fallbackOk && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('음성 재생에 실패했습니다.')),
-        );
-      }
     }
-  }
 
-  Future<void> _playAudioFile(String filePath) async {
-    await audioPlayer
-        .play(DeviceFileSource(filePath)); // No need to check result
-
-    audioPlayer.onPlayerComplete.listen((event) async {
-      playCount++;
-      if (playCount < 2) {
-        await audioPlayer.play(DeviceFileSource(filePath));
-      } else {
-        await Future.delayed(Duration(seconds: 1)); // 팝업을 더 길게 유지
+    var played = false;
+    try {
+      for (var i = 0; i < 2 && mounted && isPlaying; i++) {
+        played = await TtsService.speak(text, rate: 0.9);
+        if (!played) break;
+        if (i == 0) {
+          await Future.delayed(const Duration(milliseconds: 300));
+        }
+      }
+    } finally {
+      if (mounted) {
         setState(() {
           isPlaying = false;
         });
       }
-    });
+    }
+
+    if (!played && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('음성 재생에 실패했습니다.')),
+      );
+    }
   }
 
   Future<void> _stopTextToSpeech() async {
-    await audioPlayer.stop();
-    setState(() {
-      isPlaying = false;
-    });
+    await TtsService.stop();
+    if (mounted) {
+      setState(() {
+        isPlaying = false;
+      });
+    }
   }
 
   Future<void> _saveSentence(int sentenceId) async {
