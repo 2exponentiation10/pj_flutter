@@ -46,3 +46,6 @@ app.*.map.json
 /android/app/release
 .env
 assets/service_account.json
+
+# Local portfolio docs and screenshots
+docs/
